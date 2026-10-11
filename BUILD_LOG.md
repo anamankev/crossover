@@ -213,14 +213,14 @@ wrong thing and shown a confident, wrong number.
 | Metrics | Working, unit tested |
 | Page | Working locally in light, dark and phone widths |
 | Tests | 92 passing |
-| LLM baseline | Code written and tested with a pretend LLM. **Never run against the real LLM: there is no key in `.env` yet.** |
+| LLM baseline | Working against the real model (`openai/gpt-oss-120b` on Groq). First real runs: 8 of 8 picks matched and scored in both directions, about 4 seconds each. |
 | GitHub | Pushed. Public at https://github.com/anamankev/crossover |
 | Render | **Not deployed.** Needs your Render account. |
 | Public URL | **None yet.** |
 
 ## What to do next
 
-1. Add a free Groq API key to `.env` after `LLM_API_KEY=`, so the LLM
-   side can be run for real for the first time.
+1. Done: the Groq key is in `.env` on this Mac. Render needs the same
+   key typed into its form.
 2. Deploy on Render with the button in the README.
 3. Put the live URL at the top of the README and in the Devpost draft.
