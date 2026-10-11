@@ -67,7 +67,7 @@ Travel, books and restaurants were tested as output domains and left out. Qloo's
 You need Python 3.12 or newer and a Qloo hackathon API key.
 
 ```bash
-git clone <this repo>
+git clone https://github.com/anamankev/crossover.git
 cd crossover
 
 python3 -m venv .venv
@@ -111,7 +111,9 @@ The tests use invented data in the same shape as Qloo's, so they need no keys an
 
 ## Deploying
 
-The repo includes a [render.yaml](render.yaml) for Render's free plan. Connect the repo in Render, then enter `QLOO_API_KEY` and `LLM_API_KEY` in the dashboard when asked. Keys are never stored in the repo.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/anamankev/crossover)
+
+The repo includes a [render.yaml](render.yaml) for Render's free plan. Click the button, sign in to Render, then enter `QLOO_API_KEY`, `LLM_API_KEY` and `REPO_URL` (this repo's address) when asked. Keys are never stored in the repo.
 
 Render's free plan sleeps after 15 idle minutes. The app pings its own `/healthz` every 10 minutes to stay awake, a scheduled GitHub Action does the same from outside, and the page shows a "waking the server" message if a first request is slow. `/healthz` never calls Qloo, so staying awake costs no API quota.
 

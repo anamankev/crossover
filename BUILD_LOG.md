@@ -64,8 +64,8 @@ on the first try.
 login, no `gh` tool, no SSH key, and no Render account connected. Git
 could commit but had nowhere to push. I installed GitHub's official
 `gh` tool into `~/.local/bin` (checksum verified) and started a browser
-sign-in, which needs you to type a one-time code. Until that is done the
-code lives only on this computer.
+sign-in, which needs you to type a one-time code. Two codes expired
+before the third was approved, and the repo was pushed after that.
 
 ### 4. Qloo client (`app/qloo.py`)
 
@@ -204,11 +204,13 @@ wrong thing and shown a confident, wrong number.
 | Page | Working locally in light, dark and phone widths |
 | Tests | 86 passing |
 | LLM baseline | Code written and tested with a pretend LLM. **Never run against the real LLM: there is no key in `.env` yet.** |
-| GitHub | **Not pushed.** Waiting on your sign-in. |
-| Render | **Not deployed.** Needs the GitHub repo first, then your Render account. |
+| GitHub | Pushed. Public at https://github.com/anamankev/crossover |
+| Render | **Not deployed.** Needs your Render account. |
 | Public URL | **None yet.** |
 
 ## What to do next
 
-See the list at the end of the hand-off message from the session. In
-short: sign in to GitHub, add the LLM key, connect Render.
+1. Add an Anthropic API key to `.env` after `LLM_API_KEY=`, so the LLM
+   side can be run for real for the first time.
+2. Deploy on Render with the button in the README.
+3. Put the live URL at the top of the README and in the Devpost draft.
