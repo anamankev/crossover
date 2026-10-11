@@ -84,9 +84,10 @@ def clean_request(body: CompareRequest) -> list[str]:
     return names
 
 
-def check_rate_limit(request: Request):
+def check_rate_limit(request: Request, endpoint: str):
     forwarded = request.headers.get("x-forwarded-for", "")
-    visitor = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    address = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    visitor = (address, endpoint)  # each endpoint is counted separately
     now = time.monotonic()
     hits = request.app.state.hits
     recent = [t for t in hits.get(visitor, []) if now - t < RATE_WINDOW_SECONDS]
@@ -118,7 +119,7 @@ def api_config(request: Request):
 @app.post("/api/grounded")
 async def api_grounded(body: CompareRequest, request: Request):
     names = clean_request(body)
-    check_rate_limit(request)
+    check_rate_limit(request, "grounded")
     try:
         return await compare.grounded(request.app.state.qloo, names,
                                       body.input_domain, body.output_domain, config.TAKE)
@@ -134,6 +135,7 @@ async def api_baseline(body: CompareRequest, request: Request):
     llm = request.app.state.llm
     if not llm.configured:
         raise HTTPException(503, "The LLM baseline is not configured on this server.")
+    check_rate_limit(request, "baseline")
     try:
         return await compare.baseline(request.app.state.qloo, llm, names,
                                       body.input_domain, body.output_domain, config.TAKE)
