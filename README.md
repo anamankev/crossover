@@ -2,7 +2,9 @@
 
 **Name three films you love and get music. Name three artists and get films. Then see, in numbers, how a plain LLM's guesses compare with Qloo's taste graph.**
 
-Live demo: _added once deployed_
+**Live demo: https://crossover-x9yy.onrender.com**
+
+A ready-made comparison: [Amélie, Before Sunrise, Call Me by Your Name → music](https://crossover-x9yy.onrender.com/?from=movie&q=Am%C3%A9lie&q=Before+Sunrise&q=Call+Me+by+Your+Name)
 
 Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com/).
 

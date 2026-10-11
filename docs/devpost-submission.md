@@ -2,8 +2,8 @@
 
 **Tagline:** Name three films you love, get the music that fits. Then watch a taste graph and an LLM answer the same question, with the difference measured on screen.
 
-**Live demo:** [LIVE URL]
-**Code:** [GITHUB URL] (MIT licensed)
+**Live demo:** https://crossover-x9yy.onrender.com
+**Code:** https://github.com/anamankev/crossover (MIT licensed)
 
 ## Inspiration
 
@@ -18,7 +18,7 @@ You name three films and get music, or three artists and get films.
 Two things answer:
 
 - **The Qloo-grounded agent** finds your three inputs in Qloo's catalog, asks the taste graph for the best fits in the other domain, and reports how much each of your inputs contributed to each pick.
-- **A plain LLM** ([MODEL NAME AS SHOWN ON THE LIVE PAGE]) gets the same three inputs and the same request, with no access to Qloo.
+- **A plain LLM** (`openai/gpt-oss-120b`, an open-weight model served by Groq) gets the same three inputs and the same request, with no access to Qloo.
 
 Then Crossover does the part most demos skip. It looks up every one of the LLM's picks in Qloo's catalog and asks Qloo to score them against your three inputs, on the same scale as Qloo's own picks. The page shows both lists side by side with:
 

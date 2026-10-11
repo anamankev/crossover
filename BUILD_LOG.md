@@ -215,12 +215,19 @@ wrong thing and shown a confident, wrong number.
 | Tests | 92 passing |
 | LLM baseline | Working against the real model (`openai/gpt-oss-120b` on Groq). First real runs: 8 of 8 picks matched and scored in both directions, about 4 seconds each. |
 | GitHub | Pushed. Public at https://github.com/anamankev/crossover |
-| Render | **Not deployed.** Needs your Render account. |
-| Public URL | **None yet.** |
+| Render | Deployed and live. Checked end to end: page, Qloo side and LLM side all answer. |
+| Public URL | https://crossover-x9yy.onrender.com |
 
 ## What to do next
 
-1. Done: the Groq key is in `.env` on this Mac. Render needs the same
-   key typed into its form.
-2. Deploy on Render with the button in the README.
-3. Put the live URL at the top of the README and in the Devpost draft.
+The day's goal is met: a public URL that works. Ideas for the remaining
+days before the 30 October deadline, most valuable first:
+
+1. **Make the Qloo side a real agent.** The rules ask for an agentic
+   tool. Today it is a fixed three-step pipeline. Let an LLM decide which
+   Qloo calls to make, and offer the "score these picks against Qloo"
+   check as a tool other agents can call.
+2. **Consider a stronger baseline model** before submitting, so nobody
+   can say the comparison only beat a free model. It is two settings.
+3. **Check the page on a real phone.**
+4. **Fill in the Devpost form** from `docs/devpost-submission.md`.
