@@ -7,23 +7,27 @@ to a judge.
 ## The idea in one paragraph
 
 You name three films you love and get music back, or three artists and
-get films back. Two things answer: Qloo's taste graph, and a plain LLM
-working from memory. Then the app asks Qloo to score the LLM's picks
-against your three inputs, and shows both lists and the numbers side by
-side. The measuring is the point of the project.
+get films back. The same LLM answers twice: once from memory, and once
+as an agent that can ask Qloo's taste graph and check its own ideas
+against it. You pick the list you prefer without knowing which is which.
+Then the page shows the labels, the numbers, and what the agent did.
+The checking step is also offered as a tool other people's agents can
+call. The measuring is the point of the project.
 
 ## Words you will need
 
 | Word | What it means here |
 |---|---|
 | **API** | A way for one program to ask another for data over the internet. We ask Qloo's. |
-| **Endpoint** | One specific address on an API. Qloo's `/search` and `/v2/insights` are endpoints. So are our own `/api/grounded` and `/api/baseline`. |
+| **Endpoint** | One specific address on an API. Qloo's `/search` and `/v2/insights` are endpoints. So are our own `/api/compare` and `/api/check`. |
 | **API key** | A password that identifies us to an API. Kept in `.env`, never in the code. |
 | **Entity** | One thing in Qloo's catalog: a film, an artist. Each has an id. |
 | **Signal** | What you tell Qloo the person likes. We send three entity ids. |
 | **Affinity** | Qloo's score, 0 to 1, for how well something fits the signals. |
 | **FastAPI** | The Python library that turns our functions into a web server. |
 | **Virtual environment (`.venv`)** | A private folder of Python libraries for this project only. |
+| **Agent** | An LLM that is given tools (functions it may call) and decides for itself which to use and when. |
+| **Tool call** | The LLM replying "run this function with these inputs" instead of plain text. Our code runs it and sends the result back. |
 | **Test** | A small program that checks another piece of code gives the expected answer. |
 | **Commit / push** | Commit saves a snapshot of the code. Push sends the snapshots to GitHub. |
 | **Deploy** | Put the app on a server so anyone can open it. We use Render. |
@@ -138,6 +142,47 @@ means the LLM. The Qloo side appears first because it is fast; the LLM
 side fills in a few seconds later. Each comparison gets its own link you
 can share.
 
+### 9. Second build, same day: a real agent
+
+After the first version was live, I checked it against the judging
+criteria and it was weak in two places: the rules ask for an agent and
+it was a fixed pipeline, and "film fans get music picks" is not a real
+problem for a real audience. You said to build the best version, so:
+
+**The Qloo side became a real agent (`app/agent.py`).** The LLM gets
+three tools and chooses how to use them:
+
+| Tool | What it does |
+|---|---|
+| `get_taste_graph_picks` | Asks Qloo what people with this taste love |
+| `check_my_ideas` | Has Qloo verify and score the LLM's own ideas |
+| `submit_picks` | Gives the final answer |
+
+The one hard rule is in code, not in the prompt: a final pick must be
+an id that a tool returned, meaning Qloo has verified it. Anything else
+is thrown away and the page says how many were discarded. In the first
+live run, the agent checked "Air", "Françoise Hardy" and "St. Vincent",
+kept St. Vincent (fit 0.911) and dropped the other two (0.867, 0.853).
+
+**Both sides now use the same model.** That makes it a clean
+experiment: one thing differs, access to Qloo. It also answers "you only
+beat a free model", because the free model is on both sides.
+
+**The check became a public tool (`POST /api/check`).** Any agent can
+send "this person likes X, I want to recommend Y" and get back whether
+each Y is real and how well it fits. This is the product for a real
+audience: teams building recommendation agents.
+
+**A blind vote was added.** The page shows both lists unlabelled and
+asks which you would take, before showing anything else. This matters
+because every other number on the page comes from Qloo, and the agent
+picks using Qloo's score, so it wins those by design. People choosing
+blind is the only evidence here that Qloo does not control.
+
+**Model fallback.** Groq's free tier gives each model its own allowance
+(1,000 requests a day, 8,000 tokens a minute). If one is rate limited
+the next is tried, and the page shows which model answered each side.
+
 ## Decisions that changed the plan
 
 ### Films and music instead of restaurants, travel or books
@@ -196,12 +241,14 @@ wrong thing and shown a confident, wrong number.
 
 ## The honest limits, in the words to use with a judge
 
-- "Taste fit is Qloo's own score, and Qloo's list is sorted by it, so
-  Qloo leads on that row by design. We say so on the page. What it shows
-  is how far the LLM's picks are from the best available, and which of
-  them the graph agrees with."
-- "We cannot say which list a person would enjoy more. That needs people
-  rating the results."
+- "Taste fit is Qloo's own score, and the agent chooses using it, so
+  the agent leads on that row by design. We say so on the page. It shows
+  how far an unaided LLM lands from what the graph supports."
+- "The independent evidence is the blind vote. So far that is a small
+  number of votes, and the count restarts when the server is redeployed."
+- "Both sides run on the same free open-weight model. A stronger model
+  might guess better from memory. The comparison stays fair because both
+  sides always use the same one."
 - "When Qloo cannot score a pick, we show it as not measured. We do not
   count it as zero and we do not guess."
 
@@ -209,25 +256,27 @@ wrong thing and shown a confident, wrong number.
 
 | Thing | State |
 |---|---|
-| Qloo side, both directions | Working against the live API |
+| Agent with Qloo, both directions | Working against the live Qloo API and the real LLM |
+| Plain-LLM baseline | Working against the real LLM |
+| Taste-check tool (`/api/check`) | Working |
+| Blind vote | Working. Tally is in memory and in the server log; it restarts on redeploy. |
 | Metrics | Working, unit tested |
-| Page | Working locally in light, dark and phone widths |
-| Tests | 92 passing |
-| LLM baseline | Working against the real model (`openai/gpt-oss-120b` on Groq). First real runs: 8 of 8 picks matched and scored in both directions, about 4 seconds each. |
-| GitHub | Pushed. Public at https://github.com/anamankev/crossover |
-| Render | Deployed and live. Checked end to end: page, Qloo side and LLM side all answer. |
+| Tests | 122 passing, locally and on GitHub |
+| GitHub | Public at https://github.com/anamankev/crossover |
 | Public URL | https://crossover-x9yy.onrender.com |
 
 ## What to do next
 
-The day's goal is met: a public URL that works. Ideas for the remaining
-days before the 30 October deadline, most valuable first:
-
-1. **Make the Qloo side a real agent.** The rules ask for an agentic
-   tool. Today it is a fixed three-step pipeline. Let an LLM decide which
-   Qloo calls to make, and offer the "score these picks against Qloo"
-   check as a tool other agents can call.
-2. **Consider a stronger baseline model** before submitting, so nobody
-   can say the comparison only beat a free model. It is two settings.
-3. **Check the page on a real phone.**
-4. **Fill in the Devpost form** from `docs/devpost-submission.md`.
+1. **Submit on Devpost.** Join the hackathon at https://qloo.devpost.com
+   and paste in `docs/devpost-submission.md`. Add screenshots of the
+   blind choice and of the measurement. Judges may score from the text
+   and images alone. Submit early; it can be edited until 30 October.
+2. **Collect blind votes.** Send the link to friends and classmates. A
+   real tally is the strongest evidence this project can have.
+3. **Give the votes a permanent home.** A free database (Neon or
+   Upstash) would stop the tally restarting. About 30 minutes of work.
+4. **Offer the taste check as an MCP server**, so an agent can add it
+   with one URL.
+5. **Check the page on a real phone.**
+6. **Watch the quotas during judging (2 to 16 November).** Qloo allows
+   10,000 calls a month and Groq 1,000 requests a day per model.
