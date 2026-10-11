@@ -21,7 +21,8 @@ services:
         sync: false
       - key: LLM_BASE_URL
         value: https://api.groq.com/openai/v1
-      - key: LLM_MODEL
-        value: openai/gpt-oss-120b
+      # Tried in order. Each Groq model has its own free allowance.
+      - key: LLM_MODELS
+        value: openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b
       - key: REPO_URL
         sync: false

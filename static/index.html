@@ -3,19 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crossover: taste graph vs. LLM guessing</title>
-  <meta name="description" content="Name three films or artists you love. Crossover recommends in the other domain using Qloo's taste graph, then measures a plain LLM's picks against it.">
+  <title>Crossover: a taste check for AI agents</title>
+  <meta name="description" content="The same LLM answers twice: once from memory, once as an agent that checks its ideas against Qloo's taste graph. Pick the list you prefer blind, then see the numbers.">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
   <header class="top">
     <div class="wrap">
-      <p class="wordmark">Crossover</p>
-      <h1>Three things you love in one world.<br>What you'll love in another.</h1>
+      <p class="wordmark">Crossover <span>a taste check for AI agents, built on Qloo</span></p>
+      <h1>Same model. Same question.<br>One of them can check its taste.</h1>
       <p class="lede">
-        Name three films and get music, or three artists and get films. One answer comes from
-        Qloo's taste graph. The other comes from an LLM working from memory. Then we
-        measure the LLM's picks against the graph and show you the numbers.
+        Name three films and get music, or three artists and get films. The same LLM answers
+        twice. Once from memory. Once as an agent that asks Qloo's taste graph, checks its own
+        ideas against it, and may only recommend what Qloo has verified. Pick the list you
+        prefer without knowing which is which, then see the numbers.
       </p>
     </div>
   </header>
@@ -47,51 +48,94 @@
 
     <div id="error" class="notice error" role="alert" hidden></div>
 
+    <div id="working" class="notice" hidden>
+      <strong>Running both.</strong> The agent is working with Qloo and the same model is answering
+      without it. A new comparison usually takes about 10 seconds.
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+
     <div id="results" hidden>
       <section id="seeds" class="seeds" aria-label="What Qloo matched your inputs to"></section>
 
-      <section class="card" aria-labelledby="score-title">
+      <!-- Step 1: choose blind -->
+      <section id="blind" class="card" aria-labelledby="blind-title" hidden>
         <div class="card-head">
-          <h2 id="score-title">The measurement</h2>
-          <div class="legend" aria-label="Legend">
-            <span><i class="swatch qloo"></i>Qloo taste graph</span>
-            <span><i class="swatch llm"></i>Plain LLM</span>
-          </div>
+          <h2 id="blind-title">Before the labels: which list would you rather be handed?</h2>
+          <button id="skip-blind" type="button" class="link">Skip, show me the labels</button>
         </div>
-        <div id="scoreboard"></div>
+        <div class="columns blind-columns">
+          <div><h3>List A</h3><ol id="blind-a" class="picks compact"></ol><button type="button" class="vote" data-pick="a">I'd take List A</button></div>
+          <div><h3>List B</h3><ol id="blind-b" class="picks compact"></ol><button type="button" class="vote" data-pick="b">I'd take List B</button></div>
+        </div>
+        <button type="button" class="vote quiet" data-pick="same">I can't choose between them</button>
       </section>
 
-      <section class="columns">
-        <div class="card" aria-labelledby="qloo-title">
-          <div class="card-head">
-            <h2 id="qloo-title"><i class="swatch qloo"></i>Qloo taste graph</h2>
-            <span class="muted small">ranked by taste fit</span>
-          </div>
-          <ol id="qloo-list" class="picks"></ol>
-        </div>
-        <div class="card" aria-labelledby="llm-title">
-          <div class="card-head">
-            <h2 id="llm-title"><i class="swatch llm"></i>Plain LLM</h2>
-            <span id="llm-model" class="muted small"></span>
-          </div>
-          <ol id="llm-list" class="picks"></ol>
-        </div>
-      </section>
+      <!-- Step 2: everything else, shown after the choice -->
+      <div id="revealed" hidden>
+        <div id="verdict" class="notice verdict" hidden></div>
 
-      <section class="card method">
-        <h2>How this was measured</h2>
-        <div id="trace"></div>
-        <ul class="plain">
-          <li><strong>Same question, both sides.</strong> The LLM gets the same inputs, as matched in Qloo, and is asked for the same number of picks. It is not told to be mainstream or obscure. The exact prompt is below.</li>
-          <li><strong>Taste fit is Qloo's own score.</strong> We look each LLM pick up in Qloo's catalog and ask Qloo how well it fits your inputs. Qloo's list is ranked by that score, so Qloo leads on it by construction. The useful reading is the gap, and which LLM picks the graph agrees with.</li>
-          <li><strong>Nothing is estimated.</strong> A pick only counts when its name matches a catalog entry exactly (for films, the release year too) and Qloo returns a score. Otherwise it is shown as "not measured" and left out of every number.</li>
-          <li><strong>What this cannot tell you.</strong> Whether you would actually enjoy a pick. That needs people, not a score.</li>
-        </ul>
-        <details>
-          <summary>The exact prompt the LLM received</summary>
-          <pre id="prompt"></pre>
-        </details>
-      </section>
+        <section class="card" aria-labelledby="score-title">
+          <div class="card-head">
+            <h2 id="score-title">The measurement</h2>
+            <div class="legend" aria-label="Legend">
+              <span><i class="swatch qloo"></i>Agent with Qloo</span>
+              <span><i class="swatch llm"></i>Same model, no Qloo</span>
+            </div>
+          </div>
+          <div id="scoreboard"></div>
+        </section>
+
+        <section class="card" aria-labelledby="trace-title">
+          <div class="card-head">
+            <h2 id="trace-title">What the agent did</h2>
+            <span id="agent-meta" class="muted small"></span>
+          </div>
+          <div id="trace"></div>
+        </section>
+
+        <section class="columns">
+          <div class="card" aria-labelledby="qloo-title">
+            <div class="card-head">
+              <h2 id="qloo-title"><i class="swatch qloo"></i>Agent with Qloo</h2>
+              <span id="agent-model" class="muted small"></span>
+            </div>
+            <p id="agent-note" class="small muted" hidden></p>
+            <ol id="qloo-list" class="picks"></ol>
+          </div>
+          <div class="card" aria-labelledby="llm-title">
+            <div class="card-head">
+              <h2 id="llm-title"><i class="swatch llm"></i>Same model, no Qloo</h2>
+              <span id="llm-model" class="muted small"></span>
+            </div>
+            <ol id="llm-list" class="picks"></ol>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Use the check in your own agent</h2>
+          <p class="body">
+            The step that scored the plain LLM's list is a public endpoint. Send what a person likes
+            and what your agent wants to recommend. For each recommendation you get back whether
+            Qloo can verify it exists, how well it fits, and better-fitting alternatives.
+          </p>
+          <pre id="curl"></pre>
+          <p class="small muted">Full request and response details: <a href="/docs#/default/api_check_api_check_post">interactive API docs</a>.</p>
+        </section>
+
+        <section class="card method">
+          <h2>How to read this</h2>
+          <ul class="plain">
+            <li><strong>One variable.</strong> Both sides use the same model and get the same inputs. The only difference is that the agent can call Qloo. If one side had to fall back to a different model because of rate limits, the model names above will differ and you should read the result with that in mind.</li>
+            <li><strong>The agent leads on taste fit by design.</strong> Taste fit is Qloo's own score, and the agent chooses using it. That row shows how far an unaided LLM lands from what the graph supports. It is not an independent verdict.</li>
+            <li><strong>The independent evidence is the blind vote.</strong> People choosing between unlabelled lists is the one measure here that neither Qloo nor an LLM controls.</li>
+            <li><strong>Nothing is estimated.</strong> A pick counts only when its name matches a Qloo catalog entry exactly (for films, the release year too) and Qloo returns a score. Otherwise it is marked "not measured" and left out of every number.</li>
+          </ul>
+          <details>
+            <summary>The exact prompt the plain LLM received</summary>
+            <pre id="prompt"></pre>
+          </details>
+        </section>
+      </div>
     </div>
   </main>
 
