@@ -7,11 +7,11 @@ from app import metrics
 from app.qloo import Entity
 
 
-def pick(entity_id, affinity=None, popularity=None, genres=(), country=None, other_tags=()):
+def pick(entity_id, affinity=None, popularity=None, genres=(), other_tags=()):
     tags = [{"id": f"urn:tag:genre:test:{g}", "name": g, "type": "urn:tag:genre:test"} for g in genres]
     tags += [{"id": f"urn:tag:keyword:qloo:{k}", "name": k, "type": "urn:tag:keyword:qloo"} for k in other_tags]
     return Entity(entity_id=entity_id, name=entity_id, affinity=affinity,
-                  popularity=popularity, tags=tags, country_code=country)
+                  popularity=popularity, tags=tags)
 
 
 # ---- mean_affinity -------------------------------------------------
@@ -47,38 +47,41 @@ def test_affinity_of_zero_is_a_real_score_and_is_counted():
     assert result["n"] == 2
 
 
-# ---- mean_popularity -----------------------------------------------
+# ---- median_popularity ---------------------------------------------
 
-def test_mean_popularity_known_values():
-    picks = [pick("a", popularity=1.0), pick("b", popularity=0.5), pick("c", popularity=0.0)]
-    assert metrics.mean_popularity(picks)["value"] == pytest.approx(0.5)  # 1.5 / 3
-
-
-def test_mean_popularity_skips_missing():
-    picks = [pick("a", popularity=0.9), pick("b")]
-    result = metrics.mean_popularity(picks)
-    assert result["value"] == pytest.approx(0.9)
-    assert (result["n"], result["of"]) == (1, 2)
+def test_median_popularity_odd_count_is_the_middle_value():
+    picks = [pick("a", popularity=0.99), pick("b", popularity=0.10), pick("c", popularity=0.95)]
+    # sorted: 0.10, 0.95, 0.99 -> middle is 0.95
+    assert metrics.median_popularity(picks)["value"] == pytest.approx(0.95)
 
 
-# ---- distinct_countries --------------------------------------------
-
-def test_distinct_countries_counts_each_country_once():
-    picks = [pick("a", country="JP"), pick("b", country="JP"), pick("c", country="TW"), pick("d", country="FR")]
-    result = metrics.distinct_countries(picks)
-    assert result["value"] == 3  # JP, TW, FR
-    assert (result["n"], result["of"]) == (4, 4)
+def test_median_popularity_even_count_averages_the_middle_two():
+    picks = [pick("a", popularity=0.2), pick("b", popularity=0.4), pick("c", popularity=0.6), pick("d", popularity=1.0)]
+    # middle two are 0.4 and 0.6 -> 0.5
+    assert metrics.median_popularity(picks)["value"] == pytest.approx(0.5)
 
 
-def test_distinct_countries_ignores_picks_without_a_country():
-    picks = [pick("a", country="JP"), pick("b"), pick("c", country="JP")]
-    result = metrics.distinct_countries(picks)
-    assert result["value"] == 1
+def test_median_popularity_is_not_dragged_by_one_obscure_pick():
+    picks = [pick("a", popularity=0.999), pick("b", popularity=0.998), pick("c", popularity=0.01)]
+    # the mean would be 0.669; the median stays at 0.998
+    assert metrics.median_popularity(picks)["value"] == pytest.approx(0.998)
+
+
+def test_median_popularity_skips_missing_and_says_so():
+    picks = [pick("a", popularity=0.9), pick("b"), pick("c", popularity=0.7)]
+    result = metrics.median_popularity(picks)
+    assert result["value"] == pytest.approx(0.8)  # (0.7 + 0.9) / 2
     assert (result["n"], result["of"]) == (2, 3)
 
 
-def test_distinct_countries_none_when_no_pick_has_a_country():
-    assert metrics.distinct_countries([pick("a"), pick("b")])["value"] is None
+def test_median_popularity_with_no_data_is_none():
+    assert metrics.median_popularity([pick("a")])["value"] is None
+    assert metrics.median_popularity([]) == {"value": None, "n": 0, "of": 0}
+
+
+def test_median_popularity_does_not_depend_on_order():
+    a, b, c = pick("a", popularity=0.3), pick("b", popularity=0.9), pick("c", popularity=0.5)
+    assert metrics.median_popularity([a, b, c])["value"] == metrics.median_popularity([c, b, a])["value"] == 0.5
 
 
 # ---- tag_variety ---------------------------------------------------
@@ -154,13 +157,11 @@ def test_overlap_with_an_empty_list_is_zero():
 
 # ---- summarize -----------------------------------------------------
 
-def test_summarize_includes_countries_only_when_asked():
-    picks = [pick("a", affinity=0.5, popularity=0.5, genres=["x"], country="JP"),
-             pick("b", affinity=0.7, popularity=0.9, genres=["y"], country="FR")]
-    with_countries = metrics.summarize(picks, include_countries=True)
-    without = metrics.summarize(picks, include_countries=False)
-    assert with_countries["countries"]["value"] == 2
-    assert "countries" not in without
-    assert with_countries["affinity"]["value"] == pytest.approx(0.6)
-    assert with_countries["popularity"]["value"] == pytest.approx(0.7)
-    assert with_countries["variety"]["value"] == pytest.approx(1.0)
+def test_summarize_returns_the_three_per_list_metrics():
+    picks = [pick("a", affinity=0.5, popularity=0.5, genres=["x"]),
+             pick("b", affinity=0.7, popularity=0.9, genres=["y"])]
+    summary = metrics.summarize(picks)
+    assert set(summary) == {"affinity", "popularity", "variety"}
+    assert summary["affinity"]["value"] == pytest.approx(0.6)
+    assert summary["popularity"]["value"] == pytest.approx(0.7)
+    assert summary["variety"]["value"] == pytest.approx(1.0)

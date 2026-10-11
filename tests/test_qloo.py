@@ -27,7 +27,7 @@ def fake_entity(entity_id, name, **extra):
 # ---- normalize_name ------------------------------------------------
 
 @pytest.mark.parametrize("a, b", [
-    ("Cancún", "cancun"),
+    ("Björk", "bjork"),
     ("The Grand Budapest Hotel", "grand budapest hotel"),
     ("  KYOTO ", "Kyoto"),
     ("Tom & Jerry", "Tom and Jerry"),
@@ -49,8 +49,8 @@ def test_parse_entity_reads_the_fields_we_use():
         "name": "Testville",
         "disambiguation": "Testland",
         "popularity": 0.75,
-        "properties": {"geocode": {"country_code": "TL", "admin1_region": "North"}, "image": {"url": "https://img.test/e1.jpg"}},
-        "tags": [{"id": "urn:tag:genre:destination:beaches", "name": "Beaches", "type": "urn:tag:genre:destination"}],
+        "properties": {"release_year": 1999, "image": {"url": "https://img.test/e1.jpg"}},
+        "tags": [{"id": "urn:tag:genre:media:drama", "name": "Drama", "type": "urn:tag:genre:media"}],
         "query": {
             "affinity": 0.9,
             "explainability": {"signal.interests.entities": [
@@ -61,10 +61,9 @@ def test_parse_entity_reads_the_fields_we_use():
     assert entity.entity_id == "E1"
     assert entity.popularity == 0.75
     assert entity.affinity == 0.9
-    assert entity.country_code == "TL"
-    assert entity.region == "North"
+    assert entity.year == 1999
     assert entity.image_url == "https://img.test/e1.jpg"
-    assert entity.tags[0]["name"] == "Beaches"
+    assert entity.tags[0]["name"] == "Drama"
     assert entity.contributions == {"S1": 0.6, "S2": 0.4}
 
 
@@ -73,7 +72,7 @@ def test_parse_entity_leaves_missing_numbers_as_none():
     assert entity.popularity is None
     assert entity.affinity is None
     assert entity.tags == []
-    assert entity.country_code is None
+    assert entity.year is None
 
 
 # ---- requests ------------------------------------------------------
@@ -99,29 +98,29 @@ def test_search_sends_key_in_header_and_type_in_query():
 def test_find_all_exact_rejects_a_fuzzy_hit():
     # Qloo's search returns its nearest guess even for invented names.
     def handler(request):
-        return httpx.Response(200, json={"results": [fake_entity("E9", "Hilton Head Island")]})
+        return httpx.Response(200, json={"results": [fake_entity("E9", "Hilton Head Quartet")]})
 
     client = make_client(handler)
-    assert asyncio.run(client.find_all_exact("Zxqv Flarnbuckle Island", "urn:entity:destination")) == []
+    assert asyncio.run(client.find_all_exact("Zxqv Flarnbuckle Quartet", "urn:entity:artist")) == []
 
 
 def test_find_all_exact_accepts_a_match_that_differs_only_by_accent_or_case():
     def handler(request):
         return httpx.Response(200, json={"results": [
-            fake_entity("E0", "Cancun Bay Resort"), fake_entity("E1", "Cancún")]})
+            fake_entity("E0", "Bjork Tribute Band"), fake_entity("E1", "Björk")]})
 
     client = make_client(handler)
-    found = asyncio.run(client.find_all_exact("cancun", "urn:entity:destination"))
+    found = asyncio.run(client.find_all_exact("bjork", "urn:entity:artist"))
     assert [e.entity_id for e in found] == ["E1"]
 
 
-def test_find_all_exact_returns_every_place_with_that_name():
+def test_find_all_exact_returns_every_entity_with_that_name():
     def handler(request):
         return httpx.Response(200, json={"results": [
-            fake_entity("V1", "Venice"), fake_entity("V2", "Venice"), fake_entity("X", "Venice Beach")]})
+            fake_entity("V1", "Solaris"), fake_entity("V2", "Solaris"), fake_entity("X", "Solaris Mon Amour")]})
 
     client = make_client(handler)
-    found = asyncio.run(client.find_all_exact("Venice", "urn:entity:destination"))
+    found = asyncio.run(client.find_all_exact("Solaris", "urn:entity:movie"))
     assert [e.entity_id for e in found] == ["V1", "V2"]
 
 
@@ -136,8 +135,8 @@ def test_recommend_passes_seeds_and_asks_for_explainability():
         ]}})
 
     client = make_client(handler)
-    results = asyncio.run(client.recommend(["S1", "S2"], "urn:entity:destination", take=2))
-    assert seen["filter.type"] == "urn:entity:destination"
+    results = asyncio.run(client.recommend(["S1", "S2"], "urn:entity:artist", take=2))
+    assert seen["filter.type"] == "urn:entity:artist"
     assert seen["signal.interests.entities"] == "S1,S2"
     assert seen["feature.explainability"] == "true"
     assert [e.affinity for e in results] == [0.9, 0.8]
@@ -152,7 +151,7 @@ def test_score_only_returns_the_entities_we_asked_about():
         ]}})
 
     client = make_client(handler)
-    scored = asyncio.run(client.score(["S1"], "urn:entity:destination", ["A", "B"]))
+    scored = asyncio.run(client.score(["S1"], "urn:entity:artist", ["A", "B"]))
     assert set(scored) == {"A"}  # B was not returned, so it is absent, not guessed
     assert scored["A"].affinity == 0.7
 
@@ -162,7 +161,7 @@ def test_score_with_nothing_to_score_makes_no_call():
         raise AssertionError("should not call Qloo")
 
     client = make_client(handler)
-    assert asyncio.run(client.score(["S1"], "urn:entity:destination", [])) == {}
+    assert asyncio.run(client.score(["S1"], "urn:entity:artist", [])) == {}
 
 
 def test_repeat_search_is_served_from_cache():
@@ -205,7 +204,7 @@ def test_error_response_raises_with_qloo_message():
 
     client = make_client(handler)
     with pytest.raises(QlooError, match="invalid entity ids"):
-        asyncio.run(client.recommend(["bad"], "urn:entity:destination", take=3))
+        asyncio.run(client.recommend(["bad"], "urn:entity:artist", take=3))
 
 
 def test_network_failure_raises_qloo_error():

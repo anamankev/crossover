@@ -5,46 +5,70 @@ import httpx
 from app.qloo import QlooClient
 
 MOVIE = "urn:entity:movie"
-DEST = "urn:entity:destination"
+ARTIST = "urn:entity:artist"
 
 
-def dest(entity_id, name, country, affinity, popularity, genres=()):
+def artist(entity_id, name, affinity, popularity, genres=()):
     return {
         "entity_id": entity_id,
         "name": name,
         "disambiguation": name,
         "popularity": popularity,
-        "properties": {"geocode": {"country_code": country, "admin1_region": f"{name} Region"}},
-        "tags": [{"id": f"urn:tag:genre:destination:{g}", "name": g, "type": "urn:tag:genre:destination"}
-                 for g in genres],
+        "properties": {"image": {"url": f"https://img.test/{entity_id}.jpg"}},
+        "tags": [{"id": f"urn:tag:genre:music:{g}", "name": g, "type": "urn:tag:genre:music"} for g in genres],
         "query": {"affinity": affinity},
     }
 
 
-# What a search for each name returns (search results carry no country or affinity).
+def movie(entity_id, name, year, affinity, popularity, genres=()):
+    return {
+        "entity_id": entity_id,
+        "name": name,
+        "disambiguation": str(year),
+        "popularity": popularity,
+        "properties": {"release_year": year},
+        "tags": [{"id": f"urn:tag:genre:media:{g}", "name": g, "type": "urn:tag:genre:media"} for g in genres],
+        "query": {"affinity": affinity},
+    }
+
+
+def hit(entity_id, name, disambiguation=None, popularity=0.5):
+    """A search result. Search results carry no affinity."""
+    return {"entity_id": entity_id, "name": name, "disambiguation": disambiguation or name,
+            "popularity": popularity, "properties": {}}
+
+
 SEARCH = {
-    (MOVIE, "film one"): [{"entity_id": "M1", "name": "Film One", "disambiguation": "2001", "popularity": 0.9}],
-    (MOVIE, "film two"): [{"entity_id": "M2", "name": "Film Two", "disambiguation": "2002", "popularity": 0.8}],
-    (MOVIE, "film thre"): [{"entity_id": "M3", "name": "Film Three", "disambiguation": "2003", "popularity": 0.7}],
-    (DEST, "alphaville"): [{"entity_id": "D1", "name": "Alphaville", "popularity": 0.5}],
-    (DEST, "betatown"): [{"entity_id": "D2", "name": "Betatown", "popularity": 0.5}],
-    # Two real places share this name, in different countries.
-    (DEST, "twin city"): [{"entity_id": "T_US", "name": "Twin City", "popularity": 0.9},
-                          {"entity_id": "T_IT", "name": "Twin City", "popularity": 0.4}],
+    (MOVIE, "film one"): [hit("M1", "Film One", "2001")],
+    (MOVIE, "film two"): [hit("M2", "Film Two", "2002")],
+    (MOVIE, "film thre"): [hit("M3", "Film Three", "2003")],
+    # Two films share this title, thirty years apart.
+    (MOVIE, "remake"): [hit("R72", "Remake", "1972"), hit("R02", "Remake", "2002")],
+    (ARTIST, "alpha band"): [hit("A1", "Alpha Band")],
+    (ARTIST, "beta singer"): [hit("A2", "Beta Singer")],
+    # Two artists share this name. Search lists the obscure one first.
+    (ARTIST, "twins"): [hit("TW_SMALL", "Twins"), hit("TW_BIG", "Twins")],
     # In the catalog, but Qloo will not score it.
-    (DEST, "ghostport"): [{"entity_id": "G1", "name": "Ghostport", "popularity": 0.6}],
+    (ARTIST, "ghost act"): [hit("G1", "Ghost Act")],
     # Fuzzy search returns a near-miss for an invented name.
-    (DEST, "madeupistan"): [{"entity_id": "D9", "name": "Made Upon Avon", "popularity": 0.3}],
+    (ARTIST, "the madeups"): [hit("A9", "Made Up Orchestra")],
 }
 
-# Everything the taste graph can score, best first.
-GRAPH = [
-    dest("D1", "Alphaville", "AA", 0.90, 0.60, ["beaches", "food"]),
-    dest("D3", "Gammaburg", "AA", 0.80, 0.40, ["beaches"]),
-    dest("T_IT", "Twin City", "IT", 0.70, 0.50, ["history"]),
-    dest("D2", "Betatown", "BB", 0.50, 1.00, ["shopping"]),
-    dest("T_US", "Twin City", "US", 0.30, 0.90, ["shopping", "food"]),
-]
+# Everything the taste graph can score, best first, per result type.
+GRAPH = {
+    ARTIST: [
+        artist("A1", "Alpha Band", 0.90, 0.60, ["folk", "indie"]),
+        artist("A3", "Gamma Trio", 0.80, 0.40, ["folk"]),
+        artist("TW_BIG", "Twins", 0.70, 0.99, ["jazz"]),
+        artist("A2", "Beta Singer", 0.50, 1.00, ["pop"]),
+        artist("TW_SMALL", "Twins", 0.30, 0.10, ["pop", "indie"]),
+    ],
+    MOVIE: [
+        movie("R02", "Remake", 2002, 0.85, 0.90, ["drama"]),
+        movie("M1", "Film One", 2001, 0.75, 0.80, ["comedy"]),
+        movie("R72", "Remake", 1972, 0.65, 0.95, ["drama", "scifi"]),
+    ],
+}
 
 
 def handler(request: httpx.Request) -> httpx.Response:
@@ -55,10 +79,10 @@ def handler(request: httpx.Request) -> httpx.Response:
 
     if request.url.path == "/v2/insights":
         seeds = params["signal.interests.entities"].split(",")
-        entities = GRAPH
+        entities = GRAPH[params["filter.type"]]
         if "filter.results.entities" in params:
             wanted = set(params["filter.results.entities"].split(","))
-            entities = [e for e in GRAPH if e["entity_id"] in wanted]
+            entities = [e for e in entities if e["entity_id"] in wanted]
         entities = entities[: int(params.get("take", 20))]
         if params.get("feature.explainability") == "true":
             share = 1 / len(seeds)

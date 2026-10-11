@@ -9,11 +9,11 @@ from app import main
 from app.llm import LLMBaseline
 from tests.fakes import fake_qloo
 
-BODY = {"input_domain": "movie", "output_domain": "destination", "seeds": ["Film One", "Film Two"]}
+BODY = {"input_domain": "movie", "output_domain": "artist", "seeds": ["Film One", "Film Two"]}
 
 
-async def fake_complete(prompt):
-    return json.dumps({"picks": [{"name": "Alphaville", "country_code": "AA", "reason": "r"}]})
+async def fake_complete(prompt, schema):
+    return json.dumps({"picks": [{"name": "Alpha Band", "reason": "r"}]})
 
 
 @pytest.fixture
@@ -37,8 +37,7 @@ def test_home_page_loads(client):
 
 def test_config_lists_domains_and_examples(client):
     data = client.get("/api/config").json()
-    assert "movie" in data["input_domains"]
-    assert "destination" in data["output_domains"]
+    assert set(data["domains"]) == {"movie", "artist"}
     assert data["llm_configured"] is True
     assert len(data["examples"]) >= 1
 
@@ -47,7 +46,7 @@ def test_grounded_endpoint(client):
     response = client.post("/api/grounded", json=BODY)
     assert response.status_code == 200
     data = response.json()
-    assert data["picks"][0]["name"] == "Alphaville"
+    assert data["picks"][0]["name"] == "Alpha Band"
     assert data["metrics"]["affinity"]["n"] == len(data["picks"])
 
 

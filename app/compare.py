@@ -1,14 +1,14 @@
 """The two sides of the comparison, step by step.
 
 grounded(): the Qloo-grounded agent.
-    1. find the user's three inputs in Qloo's catalog
-    2. ask the taste graph for the best fits in a different domain
+    1. find the user's inputs in Qloo's catalog
+    2. ask the taste graph for the best fits in the other domain
     3. read back which input drove each pick
 
 baseline(): a plain LLM answering from memory, then *measured* with Qloo.
     1. ask the LLM the same question
-    2. look each of its picks up in Qloo (exact name, and the country must agree)
-    3. ask Qloo to score those picks against the same three inputs
+    2. look each of its picks up in Qloo (exact name; for films the year must agree too)
+    3. ask Qloo to score those picks against the same inputs
 
 Both return plain dictionaries ready to send to the browser.
 """
@@ -17,7 +17,7 @@ import asyncio
 import time
 
 from app import metrics
-from app.domains import INPUT_DOMAINS, OUTPUT_DOMAINS
+from app.domains import DOMAINS
 from app.llm import LLMBaseline, build_prompt
 from app.qloo import Entity, QlooClient, normalize_name
 
@@ -54,7 +54,7 @@ async def resolve_seeds(qloo: QlooClient, names: list[str], qloo_type: str) -> l
 
 
 def seed_label(entity: Entity) -> str:
-    """'Parasite (2019)'. The year or author tells same-named things apart."""
+    """'Parasite (2019)'. The year tells same-named films apart."""
     if entity.disambiguation and entity.disambiguation != entity.name:
         return f"{entity.name} ({entity.disambiguation})"
     return entity.name
@@ -71,11 +71,9 @@ def pick_to_dict(entity: Entity, seeds: list[dict] | None = None) -> dict:
     return {
         "entity_id": entity.entity_id,
         "name": entity.name,
-        "disambiguation": entity.disambiguation,
+        "year": entity.year,
         "affinity": entity.affinity,
         "popularity": entity.popularity,
-        "country_code": entity.country_code,
-        "region": entity.region,
         "image_url": entity.image_url,
         "genres": sorted({t["name"] for t in entity.tags
                           if t.get("type", "").startswith(metrics.GENRE_TAG_PREFIX)}),
@@ -88,14 +86,14 @@ def seeds_to_list(seeds: list[dict]) -> list[dict]:
         "query": s["query"],
         "entity_id": s["entity"].entity_id,
         "name": s["entity"].name,
-        "disambiguation": s["entity"].disambiguation,
+        "label": seed_label(s["entity"]),
         "image_url": s["entity"].image_url,
         "exact": s["exact"],
     } for s in seeds]
 
 
 async def grounded(qloo: QlooClient, names: list[str], input_domain: str, output_domain: str, take: int) -> dict:
-    source, target = INPUT_DOMAINS[input_domain], OUTPUT_DOMAINS[output_domain]
+    source, target = DOMAINS[input_domain], DOMAINS[output_domain]
     trace = []
 
     started = time.monotonic()
@@ -126,64 +124,57 @@ async def grounded(qloo: QlooClient, names: list[str], input_domain: str, output
     return {
         "seeds": seeds_to_list(seeds),
         "picks": [pick_to_dict(p, seeds) for p in picks],
-        "metrics": metrics.summarize(picks, include_countries=True),
+        "metrics": metrics.summarize(picks),
         "trace": trace,
     }
 
 
-def lookup_names(name: str) -> list[str]:
-    """Names to try in Qloo for one LLM pick.
-
-    An LLM often writes 'Kyoto, Japan'. Qloo's destination is 'Kyoto', so
-    the part before the comma is tried as well.
-    """
-    names = [name]
-    if "," in name:
-        names.append(name.split(",")[0].strip())
-    return names
-
-
-def choose_match(candidates: list[Entity], scored: dict[str, Entity], country_code: str):
+def choose_match(candidates: list[Entity], scored: dict[str, Entity], year: int | None, needs_year: bool):
     """Decide which Qloo entity, if any, an LLM pick really refers to.
 
     `candidates` are the catalog entries with exactly the pick's name.
-    `scored` holds the ones Qloo returned a score (and a country) for.
+    `scored` holds the ones Qloo returned a score for.
     Returns (entity, None) on a confident match, or (None, why_not).
 
-    A pick only counts when the name AND the country agree. Without the
-    country check, "Venice" would be measured as Venice, California.
+    Films: the release year must agree too, give or take one year
+    (festival and cinema release dates often differ by a year). Without
+    this, the 2002 "Solaris" could be measured as the 1972 one.
+
+    Artists: there is no year to check. If several artists share the
+    exact name, the most popular one in Qloo is taken, on the reasoning
+    that an LLM naming "Nirvana" means the famous one.
     """
     if not candidates:
-        return None, "No place with exactly this name in Qloo's catalog"
+        return None, "No exact name match in Qloo's catalog"
     with_score = [scored[c.entity_id] for c in candidates if c.entity_id in scored]
     if not with_score:
         return None, "In Qloo's catalog, but Qloo returned no score for it"
-    if not country_code:
-        return None, "The LLM gave no country, so the match could not be checked"
-    for entity in with_score:
-        if (entity.country_code or "").upper() == country_code.upper():
-            return entity, None
-    return None, f"Qloo has a place with this name, but not in {country_code.upper()}"
+
+    if needs_year:
+        if year is None:
+            return None, "The LLM gave no year, so the match could not be checked"
+        for entity in with_score:
+            if entity.year is not None and abs(entity.year - year) <= 1:
+                return entity, None
+        return None, f"Qloo has this title, but not from {year}"
+
+    return max(with_score, key=lambda e: e.popularity if e.popularity is not None else -1), None
 
 
 async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
                    input_domain: str, output_domain: str, take: int) -> dict:
-    source, target = INPUT_DOMAINS[input_domain], OUTPUT_DOMAINS[output_domain]
+    source, target = DOMAINS[input_domain], DOMAINS[output_domain]
+    needs_year = target["needs_year"]
 
     seeds = await resolve_seeds(qloo, names, source["qloo_type"])
     seed_ids = [s["entity"].entity_id for s in seeds]
     seed_labels = [seed_label(s["entity"]) for s in seeds]
 
-    llm_picks = await llm.recommend(seed_labels, source["noun"], target["noun"], target["naming"], take)
+    llm_picks = await llm.recommend(seed_labels, source["noun"], target["noun"],
+                                    target["naming"], take, needs_year)
 
-    async def candidates_for(pick: dict) -> list[Entity]:
-        for name in lookup_names(pick["name"]):
-            found = await qloo.find_all_exact(name, target["qloo_type"])
-            if found:
-                return found
-        return []
-
-    candidates = await asyncio.gather(*(candidates_for(p) for p in llm_picks))
+    candidates = await asyncio.gather(
+        *(qloo.find_all_exact(p["name"], target["qloo_type"]) for p in llm_picks))
 
     # One call scores every candidate against the same inputs the Qloo side used.
     candidate_ids = list(dict.fromkeys(e.entity_id for group in candidates for e in group))
@@ -191,17 +182,17 @@ async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
 
     rows, measured, used = [], [], set()
     for pick, group in zip(llm_picks, candidates):
-        entity, why_not = choose_match(group, scored, pick["country_code"])
+        entity, why_not = choose_match(group, scored, pick["year"], needs_year)
         row = {
             "llm_name": pick["name"],
-            "llm_country_code": pick["country_code"],
+            "llm_year": pick["year"],
             "reason": pick["reason"],
             "measured": entity is not None,
             "why_not": why_not,
         }
         if entity:
             row.update(pick_to_dict(entity))
-            if entity.entity_id not in used:  # the same place named twice counts once
+            if entity.entity_id not in used:  # the same thing named twice counts once
                 used.add(entity.entity_id)
                 measured.append(entity)
         rows.append(row)
@@ -210,9 +201,9 @@ async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
 
     return {
         "model": llm.model,
-        "prompt": build_prompt(seed_labels, source["noun"], target["noun"], target["naming"], take),
+        "prompt": build_prompt(seed_labels, source["noun"], target["noun"], target["naming"], take, needs_year),
         "picks": rows,
         "measured": {"count": sum(1 for r in rows if r["measured"]), "of": len(rows)},
-        "metrics": metrics.summarize(measured, include_countries=True),
+        "metrics": metrics.summarize(measured),
         "overlap": metrics.overlap(qloo_picks, measured),
     }

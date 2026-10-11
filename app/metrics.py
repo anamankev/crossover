@@ -17,8 +17,8 @@ from itertools import combinations
 
 from app.qloo import Entity
 
-# Only "genre" tags are used for variety. Qloo attaches up to 60 other
-# tags (keywords, characters, motifs) to some entities and none to
+# Only "genre" tags are used for variety. Qloo attaches a hundred other
+# tags (instruments, themes, keywords) to some entities and few to
 # others, so comparing full tag sets would mostly measure how well
 # documented an entity is, not how different two picks are.
 GENRE_TAG_PREFIX = "urn:tag:genre"
@@ -36,20 +36,24 @@ def mean_affinity(picks: list[Entity]) -> dict:
     return _result(sum(scores) / len(scores), len(scores), len(picks))
 
 
-def mean_popularity(picks: list[Entity]) -> dict:
-    """Average Qloo popularity percentile (0..1). Higher means more mainstream."""
-    scores = [p.popularity for p in picks if p.popularity is not None]
+def median_popularity(picks: list[Entity]) -> dict:
+    """The middle pick's Qloo popularity percentile (0..1).
+
+    0.999 means the typical pick is more popular than 99.9% of Qloo's
+    catalog in its category. The median is used, not the mean, because
+    well-known films and artists all sit between 0.99 and 1.0 and one
+    obscure pick would drag a mean far from what the list is really like.
+    With an even number of picks it is the average of the middle two.
+    """
+    scores = sorted(p.popularity for p in picks if p.popularity is not None)
     if not scores:
         return _result(None, 0, len(picks))
-    return _result(sum(scores) / len(scores), len(scores), len(picks))
-
-
-def distinct_countries(picks: list[Entity]) -> dict:
-    """How many different countries the picks are in. Destinations only."""
-    codes = [p.country_code for p in picks if p.country_code]
-    if not codes:
-        return _result(None, 0, len(picks))
-    return _result(len(set(codes)), len(codes), len(picks))
+    middle = len(scores) // 2
+    if len(scores) % 2:
+        value = scores[middle]
+    else:
+        value = (scores[middle - 1] + scores[middle]) / 2
+    return _result(value, len(scores), len(picks))
 
 
 def genre_tags(pick: Entity) -> set[str]:
@@ -83,13 +87,10 @@ def overlap(list_a: list[Entity], list_b: list[Entity]) -> dict:
     return {"count": len(shared), "ids": sorted(shared), "of_a": len(ids_a), "of_b": len(ids_b)}
 
 
-def summarize(picks: list[Entity], include_countries: bool) -> dict:
+def summarize(picks: list[Entity]) -> dict:
     """All per-list metrics for one side of the comparison."""
-    summary = {
+    return {
         "affinity": mean_affinity(picks),
-        "popularity": mean_popularity(picks),
+        "popularity": median_popularity(picks),
         "variety": tag_variety(picks),
     }
-    if include_countries:
-        summary["countries"] = distinct_countries(picks)
-    return summary

@@ -28,16 +28,15 @@ class QlooError(Exception):
 
 @dataclass
 class Entity:
-    """One thing in Qloo's catalog: a film, a city, a book, an artist."""
+    """One thing in Qloo's catalog: a film or a music artist."""
 
     entity_id: str
     name: str
-    disambiguation: str = ""  # e.g. "2019" for a film, "1987, Haruki Murakami" for a book
+    disambiguation: str = ""  # e.g. "2019" for a film
     popularity: float | None = None  # percentile 0..1, None if Qloo did not send it
     affinity: float | None = None  # fit to the input signals 0..1, None outside insights calls
     tags: list[dict] = field(default_factory=list)  # each {"id", "name", "type"}
-    country_code: str | None = None  # two-letter code, e.g. "JP"
-    region: str | None = None  # e.g. "Okinawa"
+    year: int | None = None  # release year, films only
     image_url: str | None = None
     description: str | None = None
     # entity_id of an input -> share of this recommendation it explains
@@ -88,8 +87,7 @@ def parse_entity(raw: dict) -> Entity:
         popularity=raw.get("popularity"),
         affinity=query.get("affinity"),
         tags=tags,
-        country_code=(props.get("geocode") or {}).get("country_code") or None,
-        region=(props.get("geocode") or {}).get("admin1_region") or None,
+        year=props.get("release_year") if isinstance(props.get("release_year"), int) else None,
         image_url=(props.get("image") or {}).get("url"),
         description=description,
         contributions=contributions,
@@ -180,8 +178,7 @@ class QlooClient:
 
         Qloo's search returns its closest guess even for names that do
         not exist, so a hit alone proves nothing. There can also be more
-        than one real match: "Venice" is a city in Italy, in California
-        and in Florida.
+        than one real match: "Solaris" is a 1972 film and a 2002 film.
         """
         wanted = normalize_name(name)
         if not wanted:

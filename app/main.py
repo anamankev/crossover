@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import compare, config
-from app.domains import INPUT_DOMAINS, OUTPUT_DOMAINS, allowed_pair
+from app.domains import DOMAINS, allowed_pair
 from app.llm import LLMBaseline, LLMError
 from app.qloo import QlooClient, QlooError
 
@@ -27,15 +27,18 @@ RATE_LIMIT = 30
 RATE_WINDOW_SECONDS = 10 * 60
 
 EXAMPLES = [
-    {"label": "Parasite · Spirited Away · The Grand Budapest Hotel",
-     "input_domain": "movie", "output_domain": "destination",
-     "seeds": ["Parasite", "Spirited Away", "The Grand Budapest Hotel"]},
+    {"label": "Amélie · Before Sunrise · Call Me by Your Name",
+     "input_domain": "movie", "output_domain": "artist",
+     "seeds": ["Amélie", "Before Sunrise", "Call Me by Your Name"]},
+    {"label": "Mad Max: Fury Road · Blade Runner 2049 · Dune",
+     "input_domain": "movie", "output_domain": "artist",
+     "seeds": ["Mad Max: Fury Road", "Blade Runner 2049", "Dune"]},
     {"label": "Radiohead · Björk · Frank Ocean",
-     "input_domain": "artist", "output_domain": "destination",
+     "input_domain": "artist", "output_domain": "movie",
      "seeds": ["Radiohead", "Björk", "Frank Ocean"]},
-    {"label": "Norwegian Wood · The Remains of the Day · Beloved",
-     "input_domain": "book", "output_domain": "destination",
-     "seeds": ["Norwegian Wood", "The Remains of the Day", "Beloved"]},
+    {"label": "Johnny Cash · Dolly Parton · Willie Nelson",
+     "input_domain": "artist", "output_domain": "movie",
+     "seeds": ["Johnny Cash", "Dolly Parton", "Willie Nelson"]},
 ]
 
 
@@ -74,7 +77,7 @@ class CompareRequest(BaseModel):
 
 def clean_request(body: CompareRequest) -> list[str]:
     if not allowed_pair(body.input_domain, body.output_domain):
-        raise HTTPException(400, "Pick two different domains from the lists.")
+        raise HTTPException(400, "Choose films to music, or music to films.")
     names = [s.strip()[:100] for s in body.seeds if s.strip()]
     if not names:
         raise HTTPException(400, "Enter at least one thing you love.")
@@ -103,8 +106,7 @@ def healthz():
 @app.get("/api/config")
 def api_config(request: Request):
     return {
-        "input_domains": {k: v["label"] for k, v in INPUT_DOMAINS.items()},
-        "output_domains": {k: v["label"] for k, v in OUTPUT_DOMAINS.items()},
+        "domains": {k: {"label": v["label"], "noun": v["noun"]} for k, v in DOMAINS.items()},
         "examples": EXAMPLES,
         "take": config.TAKE,
         "llm_configured": request.app.state.llm.configured,
@@ -120,7 +122,7 @@ async def api_grounded(body: CompareRequest, request: Request):
         return await compare.grounded(request.app.state.qloo, names,
                                       body.input_domain, body.output_domain, config.TAKE)
     except compare.InputNotFound as exc:
-        raise HTTPException(404, f'Qloo has nothing called "{exc}" in {INPUT_DOMAINS[body.input_domain]["label"]}.')
+        raise HTTPException(404, f'Qloo has nothing called "{exc}" in {DOMAINS[body.input_domain]["label"]}.')
     except QlooError as exc:
         raise HTTPException(502, str(exc))
 
@@ -135,7 +137,7 @@ async def api_baseline(body: CompareRequest, request: Request):
         return await compare.baseline(request.app.state.qloo, llm, names,
                                       body.input_domain, body.output_domain, config.TAKE)
     except compare.InputNotFound as exc:
-        raise HTTPException(404, f'Qloo has nothing called "{exc}" in {INPUT_DOMAINS[body.input_domain]["label"]}.')
+        raise HTTPException(404, f'Qloo has nothing called "{exc}" in {DOMAINS[body.input_domain]["label"]}.')
     except LLMError as exc:
         raise HTTPException(502, str(exc))
     except QlooError as exc:
