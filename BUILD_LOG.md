@@ -261,9 +261,16 @@ wrong thing and shown a confident, wrong number.
 | Taste-check tool (`/api/check`) | Working |
 | Blind vote | Working. Tally is in memory and in the server log; it restarts on redeploy. |
 | Metrics | Working, unit tested |
-| Tests | 122 passing, locally and on GitHub |
+| Tests | 123 passing, locally and on GitHub |
 | GitHub | Public at https://github.com/anamankev/crossover |
 | Public URL | https://crossover-x9yy.onrender.com |
+
+## One thing to know about deploying
+
+Render is not deploying automatically when code is pushed to GitHub.
+After a push, open the crossover service on Render and click
+**Manual Deploy**, then **Deploy latest commit**. A "deploy hook" from
+Render's Settings page would let GitHub trigger this by itself.
 
 ## What to do next
 

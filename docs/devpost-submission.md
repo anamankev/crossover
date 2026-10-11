@@ -10,6 +10,8 @@
 - Straight to the numbers: https://crossover-x9yy.onrender.com/?from=movie&q=Mad+Max%3A+Fury+Road&q=Blade+Runner+2049&q=Dune&labels=1
 - The taste-check API: https://crossover-x9yy.onrender.com/docs
 
+**Images to upload** (in `docs/images/`): `1-blind-choice.png`, `2-measurement.png`, `3-both-lists.png`
+
 ## Inspiration
 
 The brief says an agent should beat an LLM-only approach because it has Qloo. Nearly every entry will claim that. We wanted to show it in a way a judge can check in thirty seconds, and to be straight about what the evidence can and cannot prove.
@@ -50,7 +52,7 @@ Qloo is in every step. Without it there is no product.
 - **Agent:** an LLM with tool calling (`openai/gpt-oss-120b` on Groq), three tools, and a loop we wrote ourselves. One rule lives in code and not in the prompt: a final pick must be an id that a Qloo tool returned. Anything else the model submits is thrown away, and the trace shows how many were discarded.
 - **Backend:** Python and FastAPI. A small Qloo client handles the 5-per-second limit, retries and caching. When one model is rate limited the next is tried.
 - **Frontend:** plain HTML, CSS and JavaScript, no build step. Light and dark themes.
-- **Tests:** 122 unit tests. Every metric is checked against answers worked out by hand, and the agent is tested with a scripted model, including the cases where it tries to submit something Qloo never verified.
+- **Tests:** 123 unit tests. Every metric is checked against answers worked out by hand, and the agent is tested with a scripted model, including the cases where it tries to submit something Qloo never verified.
 - **Hosting:** Render, with a keepalive so judges do not meet a sleeping server.
 
 ## The rule we held ourselves to

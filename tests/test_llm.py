@@ -48,6 +48,11 @@ def test_parse_picks_year_is_none_when_missing_or_not_a_number():
     assert parse_picks(text, take=8)[0]["year"] is None
 
 
+def test_parse_picks_cleans_up_odd_spacing_in_names():
+    text = json.dumps({"picks": [{"name": "Daft\u00a0Punk", "reason": ""}, {"name": "  Nine   Inch\u00a0Nails ", "reason": ""}]})
+    assert [p["name"] for p in parse_picks(text, take=8)] == ["Daft Punk", "Nine Inch Nails"]
+
+
 def test_parse_picks_drops_duplicates_and_blanks_and_cuts_to_take():
     picks = parse_picks(answer("Lisbon", "lisbon", "  ", "Kyoto", "Oslo"), take=2)
     assert [p["name"] for p in picks] == ["Lisbon", "Kyoto"]

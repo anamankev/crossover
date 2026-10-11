@@ -12,6 +12,10 @@ Same model. Same question. One of them can check its taste.
 
 Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com/).
 
+| Choose blind | See the measurement and what the agent did |
+|---|---|
+| ![Two unlabelled lists and a prompt to pick one](docs/images/1-blind-choice.png) | ![Taste fit, verification, popularity and variety for both sides, then the agent's tool calls](docs/images/2-measurement.png) |
+
 ## The problem
 
 An LLM will recommend things with total confidence, from memory. It has no way to know whether a pick fits the person in front of it, or whether the thing it named even exists. Teams building recommendation agents ship those guesses to users with nothing checking them.
@@ -147,7 +151,7 @@ Open http://localhost:8000.
 python -m pytest
 ```
 
-122 tests. They use invented data in the same shape as Qloo's and a scripted stand-in for the LLM, so they need no keys and make no network calls.
+123 tests. They use invented data in the same shape as Qloo's and a scripted stand-in for the LLM, so they need no keys and make no network calls.
 
 ## How the code is laid out
 

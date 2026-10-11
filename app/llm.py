@@ -60,7 +60,8 @@ def parse_picks(text: str, take: int) -> list[dict]:
     for item in data["picks"]:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name", "")).strip()
+        # split/join also turns non-breaking spaces, which models sometimes emit, into plain ones
+        name = " ".join(str(item.get("name", "")).split())
         year = item.get("year")
         if isinstance(year, bool) or not isinstance(year, int):
             year = None
