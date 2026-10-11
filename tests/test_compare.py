@@ -7,7 +7,7 @@ import json
 import pytest
 
 from app import compare
-from app.llm import LLMBaseline
+from app.llm import LLM
 from app.qloo import Entity
 from tests.fakes import fake_qloo
 
@@ -25,7 +25,7 @@ def llm_saying(*picks):
                 row["year"] = year
             rows.append(row)
         return json.dumps({"picks": rows})
-    return LLMBaseline("", complete=complete)
+    return LLM("", complete=complete)
 
 
 # ---- choose_match: films --------------------------------------------
@@ -84,41 +84,42 @@ def test_match_when_qloo_returned_no_score():
     assert entity is None and "no score" in why_not
 
 
-# ---- grounded ------------------------------------------------------
+# ---- resolve_seeds --------------------------------------------------
 
-def test_grounded_returns_qloo_picks_in_order_with_metrics_and_drivers():
-    result = asyncio.run(compare.grounded(fake_qloo(), FILMS, "movie", "artist", take=3))
-    assert [s["label"] for s in result["seeds"]] == ["Film One (2001)", "Film Two (2002)"]
-    assert [p["name"] for p in result["picks"]] == ["Alpha Band", "Gamma Trio", "Twins"]
-    # (0.90 + 0.80 + 0.70) / 3 = 0.80
-    assert result["metrics"]["affinity"]["value"] == pytest.approx(0.80)
-    # popularity 0.60, 0.40, 0.99 -> sorted 0.40, 0.60, 0.99 -> middle is 0.60
-    assert result["metrics"]["popularity"]["value"] == pytest.approx(0.60)
-    drivers = result["picks"][0]["drivers"]
-    assert {d["seed"] for d in drivers} == {"Film One", "Film Two"}
-    assert sum(d["share"] for d in drivers) == pytest.approx(1.0)
-    assert len(result["trace"]) == 3
+def seeds_for(*names):
+    return asyncio.run(compare.resolve_seeds(fake_qloo(), list(names), "urn:entity:movie"))
 
 
-def test_grounded_works_in_the_other_direction_and_reports_film_years():
-    result = asyncio.run(compare.grounded(fake_qloo(), ["Alpha Band"], "artist", "movie", take=2))
-    assert [(p["name"], p["year"]) for p in result["picks"]] == [("Remake", 2002), ("Film One", 2001)]
+def test_resolve_seeds_finds_exact_matches():
+    seeds = seeds_for("Film One", "Film Two")
+    assert [compare.seed_label(s["entity"]) for s in seeds] == ["Film One (2001)", "Film Two (2002)"]
+    assert all(s["exact"] for s in seeds)
 
 
-def test_grounded_marks_an_inexact_input_match():
-    result = asyncio.run(compare.grounded(fake_qloo(), ["film thre"], "movie", "artist", take=3))
-    assert result["seeds"][0]["name"] == "Film Three"
-    assert result["seeds"][0]["exact"] is False
+def test_resolve_seeds_marks_an_inexact_match():
+    seed = seeds_for("film thre")[0]
+    assert seed["entity"].name == "Film Three" and seed["exact"] is False
 
 
-def test_grounded_counts_a_repeated_input_once():
-    result = asyncio.run(compare.grounded(fake_qloo(), ["Film One", "film one"], "movie", "artist", take=3))
-    assert len(result["seeds"]) == 1
+def test_resolve_seeds_counts_a_repeated_input_once():
+    assert len(seeds_for("Film One", "film one")) == 1
 
 
-def test_grounded_raises_when_an_input_is_not_in_qloo():
+def test_resolve_seeds_raises_when_an_input_is_not_in_qloo():
     with pytest.raises(compare.InputNotFound):
-        asyncio.run(compare.grounded(fake_qloo(), ["No Such Film"], "movie", "artist", take=3))
+        seeds_for("No Such Film")
+
+
+# ---- check_candidates -----------------------------------------------
+
+def test_check_candidates_verifies_scores_and_explains_misses():
+    candidates = [{"name": "Alpha Band", "year": None}, {"name": "The Madeups", "year": None},
+                  {"name": "Ghost Act", "year": None}]
+    results = asyncio.run(compare.check_candidates(fake_qloo(), ["M1"], "artist", candidates))
+    assert [r["name"] for r in results] == ["Alpha Band", "The Madeups", "Ghost Act"]  # order kept
+    assert results[0]["entity"].affinity == 0.90 and results[0]["why_not"] is None
+    assert results[1]["entity"] is None and "No exact name match" in results[1]["why_not"]
+    assert results[2]["entity"] is None and "no score" in results[2]["why_not"]
 
 
 # ---- baseline ------------------------------------------------------
@@ -167,13 +168,6 @@ def test_baseline_counts_the_same_artist_once():
     assert result["metrics"]["affinity"]["n"] == 1  # but the artist counts once
 
 
-def test_baseline_overlap_counts_picks_both_sides_chose():
-    # Qloo's top 3 are A1, A3, TW_BIG. The LLM names A1 and A2.
-    result = run_baseline("Alpha Band", "Beta Singer")
-    assert result["overlap"]["count"] == 1
-    assert result["overlap"]["ids"] == ["A1"]
-
-
 def test_baseline_for_films_uses_the_year_the_llm_gave():
     llm = llm_saying(("Remake", 1972), ("Remake", 2002), ("Remake", 1950))
     result = asyncio.run(compare.baseline(fake_qloo(), llm, ["Alpha Band"], "artist", "movie", take=3))
@@ -186,4 +180,4 @@ def test_baseline_for_films_uses_the_year_the_llm_gave():
 def test_baseline_reports_the_exact_prompt_and_model():
     result = run_baseline("Alpha Band")
     assert "Film One (2001)" in result["prompt"]
-    assert result["model"] == "openai/gpt-oss-120b"
+    assert result["model"] == "openai/gpt-oss-120b"  # the first of the default models

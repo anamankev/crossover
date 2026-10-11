@@ -143,16 +143,18 @@ def test_tag_variety_does_not_depend_on_order():
 # ---- overlap -------------------------------------------------------
 
 def test_overlap_counts_shared_entity_ids():
-    left = [pick("a"), pick("b"), pick("c")]
-    right = [pick("b"), pick("c"), pick("d"), pick("e")]
-    result = metrics.overlap(left, right)
+    result = metrics.overlap(["a", "b", "c"], ["b", "c", "d", "e"])
     assert result["count"] == 2
     assert result["ids"] == ["b", "c"]
     assert (result["of_a"], result["of_b"]) == (3, 4)
 
 
 def test_overlap_with_an_empty_list_is_zero():
-    assert metrics.overlap([pick("a")], [])["count"] == 0
+    assert metrics.overlap(["a"], [])["count"] == 0
+
+
+def test_overlap_counts_a_repeated_id_once():
+    assert metrics.overlap(["a", "a", "b"], ["a"]) == {"count": 1, "ids": ["a"], "of_a": 2, "of_b": 1}
 
 
 # ---- summarize -----------------------------------------------------

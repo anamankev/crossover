@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from app.llm import LLMBaseline, LLMError, build_prompt, parse_picks
+from app.llm import LLM, LLMError, build_prompt, parse_picks
 
 
 def answer(*names, year=None):
@@ -72,7 +72,7 @@ def test_recommend_uses_the_llm_once_then_the_cache():
         calls.append(prompt)
         return answer("Lisbon")
 
-    llm = LLMBaseline("", complete=complete)
+    llm = LLM("", complete=complete)
 
     async def twice():
         first = await llm.recommend(["A", "B"], "films", "music artists", "naming", 8, False)
@@ -81,11 +81,12 @@ def test_recommend_uses_the_llm_once_then_the_cache():
 
     first, second = asyncio.run(twice())
     assert first == second
+    assert first[0][0]["name"] == "Lisbon"  # (picks, model name)
     assert len(calls) == 1
 
 
 def test_recommend_without_a_key_fails_clearly_instead_of_inventing_picks():
-    llm = LLMBaseline("")
+    llm = LLM("")
     assert llm.configured is False
     with pytest.raises(LLMError, match="No LLM API key"):
         asyncio.run(llm.recommend(["A"], "films", "music artists", "naming", 8, False))
@@ -94,7 +95,7 @@ def test_recommend_without_a_key_fails_clearly_instead_of_inventing_picks():
 # ---- the real HTTP call, against a pretend LLM server ---------------
 
 def llm_with_server(handler):
-    llm = LLMBaseline("test-key", model="test-model", base_url="https://llm.test/v1")
+    llm = LLM("test-key", models=["test-model", "backup-model"], base_url="https://llm.test/v1")
     llm._http = httpx.AsyncClient(base_url="https://llm.test/v1", transport=httpx.MockTransport(handler),
                                   headers={"Authorization": "Bearer test-key"})
     return llm
@@ -114,8 +115,9 @@ def test_real_call_sends_the_key_model_and_prompt_and_reads_the_answer():
         return chat_reply(answer("Nick Drake"))
 
     llm = llm_with_server(handler)
-    picks = asyncio.run(llm.recommend(["Film One"], "films", "music artists", "naming", 8, False))
+    picks, model = asyncio.run(llm.recommend(["Film One"], "films", "music artists", "naming", 8, False))
     assert picks[0]["name"] == "Nick Drake"
+    assert model == "test-model"
     assert seen["path"] == "/v1/chat/completions"
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["model"] == "test-model"
@@ -140,3 +142,37 @@ def test_real_call_reports_an_unexpected_reply_shape():
     llm = llm_with_server(lambda request: httpx.Response(200, json={"unexpected": True}))
     with pytest.raises(LLMError, match="unexpected format"):
         asyncio.run(llm.recommend(["A"], "films", "music artists", "naming", 8, False))
+
+
+def test_real_call_falls_back_to_the_next_model_when_the_first_is_rate_limited():
+    tried = []
+
+    def handler(request):
+        model = json.loads(request.content)["model"]
+        tried.append(model)
+        if model == "test-model":
+            return httpx.Response(429, json={"error": "rate limit"})
+        return chat_reply(answer("Nick Drake"))
+
+    llm = llm_with_server(handler)
+    picks, model = asyncio.run(llm.recommend(["Film One"], "films", "music artists", "naming", 8, False))
+    assert tried == ["test-model", "backup-model"]
+    assert model == "backup-model"
+    assert picks[0]["name"] == "Nick Drake"
+
+
+def test_chat_passes_tools_through_and_returns_tool_calls():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": {
+            "content": None, "tool_calls": [{"id": "c1", "type": "function",
+                                             "function": {"name": "t", "arguments": "{}"}}]}}]})
+
+    llm = llm_with_server(handler)
+    tools = [{"type": "function", "function": {"name": "t", "parameters": {"type": "object"}}}]
+    message = asyncio.run(llm.chat([{"role": "user", "content": "hi"}], "test-model", tools=tools))
+    assert seen["body"]["tools"] == tools and seen["body"]["tool_choice"] == "auto"
+    assert "response_format" not in seen["body"]
+    assert message["tool_calls"][0]["function"]["name"] == "t"

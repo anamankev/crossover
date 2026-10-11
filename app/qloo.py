@@ -218,6 +218,7 @@ class QlooClient:
             "signal.interests.entities": ",".join(seed_ids),
             "filter.results.entities": ",".join(entity_ids),
             "take": min(max(len(entity_ids), 1), 50),
+            "feature.explainability": "true",
         })
         entities = [parse_entity(raw) for raw in (data.get("results") or {}).get("entities") or []]
         scored = {e.entity_id: e for e in entities if e.entity_id in set(entity_ids)}

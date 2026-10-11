@@ -1,13 +1,14 @@
-"""The baseline: an LLM asked the same question with no Qloo data.
+"""Talking to the LLM, and the plain-LLM baseline.
 
-It gets the same three inputs the Qloo side gets and is asked for the
-same number of picks. It is not told to be mainstream or obscure. The
-prompt is deliberately plain so the comparison is fair: this is what you
-get when an agent recommends from its own memory.
+The baseline is an LLM asked the question with no Qloo data. It gets the
+same inputs the agent gets and is asked for the same number of picks. It
+is not told to be mainstream or obscure. The prompt is deliberately
+plain so the comparison is fair: this is what you get when a model
+recommends from its own memory.
 
-The call uses the "OpenAI-compatible" chat format, which Groq, Google,
+Calls use the "OpenAI-compatible" chat format, which Groq, Google,
 OpenRouter, OpenAI and others all accept. Changing provider or model is
-a matter of changing LLM_BASE_URL and LLM_MODEL, not the code.
+a matter of changing settings, not code.
 """
 
 import json
@@ -15,12 +16,14 @@ import time
 
 import httpx
 
-# Groq has a free tier that needs no credit card.
+# Groq has a free tier that needs no credit card. Each model has its own
+# allowance, so when one is rate limited the next one is tried.
 DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-DEFAULT_MODEL = "openai/gpt-oss-120b"
+DEFAULT_MODELS = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
 CACHE_SECONDS = 24 * 60 * 60
 
 SYSTEM_PROMPT = "You are a recommendation assistant. Recommend things the person will genuinely love."
+
 
 class LLMError(Exception):
     """The LLM could not be reached, refused, or answered in the wrong shape."""
@@ -71,34 +74,52 @@ def parse_picks(text: str, take: int) -> list[dict]:
     return picks[:take]
 
 
-class LLMBaseline:
-    def __init__(self, api_key: str, model: str = "", base_url: str = "", complete=None):
-        """`complete` can replace the real API call in tests: async (prompt) -> str."""
-        self.model = model or DEFAULT_MODEL
-        self.configured = bool(api_key) or complete is not None
+class LLM:
+    def __init__(self, api_key: str, models: list[str] | None = None, base_url: str = "",
+                 complete=None, chat=None):
+        """`models` are tried in order. The first is the one normally used.
+
+        Tests can replace the network: `complete` is async (prompt) -> str
+        for the baseline, `chat` is async (messages, tools) -> message dict
+        for the agent.
+        """
+        self.models = list(models or DEFAULT_MODELS)
+        self.model = self.models[0]
+        self.configured = bool(api_key) or complete is not None or chat is not None
         self._http = httpx.AsyncClient(
             base_url=(base_url or DEFAULT_BASE_URL).rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=60.0,
         ) if api_key else None
-        self._complete = complete or self._call_llm
-        self._cache: dict[tuple, tuple[float, list[dict]]] = {}
+        self._complete = complete
+        self._chat = chat
+        self._cache: dict[tuple, tuple[float, tuple[list[dict], str]]] = {}
 
     async def close(self):
         if self._http:
             await self._http.aclose()
 
-    async def _call_llm(self, prompt: str) -> str:
+    async def chat(self, messages: list[dict], model: str, tools: list[dict] | None = None,
+                   json_mode: bool = False) -> dict:
+        """One request to one model. Returns the assistant's message.
+
+        The message has "content" (text) and, when the model wants to use
+        a tool, "tool_calls". Raises LLMError on any failure.
+        """
+        if self._chat:
+            return await self._chat(messages, tools)
+        if not self._http:
+            raise LLMError("No LLM API key is configured")
+
+        body = {"model": model, "messages": messages}
+        if tools:
+            body["tools"] = tools
+            body["tool_choice"] = "auto"
+        if json_mode:
+            # Ask for a JSON object back. The caller still checks the shape.
+            body["response_format"] = {"type": "json_object"}
         try:
-            response = await self._http.post("/chat/completions", json={
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                # Ask for a JSON object back. parse_picks() still checks the shape.
-                "response_format": {"type": "json_object"},
-            })
+            response = await self._http.post("/chat/completions", json=body)
         except httpx.HTTPError as exc:
             raise LLMError("Could not reach the LLM") from exc
 
@@ -111,25 +132,45 @@ class LLMBaseline:
 
         try:
             choice = response.json()["choices"][0]
-            text = choice["message"]["content"]
+            message = choice["message"]
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise LLMError("The LLM answered in an unexpected format") from exc
         if choice.get("finish_reason") == "length":
             raise LLMError("The LLM answer was cut off")
-        if not text:
+        if not isinstance(message, dict) or not (message.get("content") or message.get("tool_calls")):
             raise LLMError("The LLM returned no text")
-        return text
+        return message
 
     async def recommend(self, seed_names: list[str], input_noun: str, output_noun: str,
-                        naming: str, take: int, with_year: bool) -> list[dict]:
-        """Ask the plain LLM for `take` picks. Returns [{"name", "year", "reason"}]."""
+                        naming: str, take: int, with_year: bool) -> tuple[list[dict], str]:
+        """Ask the plain LLM for `take` picks.
+
+        Returns ([{"name", "year", "reason"}], name of the model that answered).
+        """
         if not self.configured:
             raise LLMError("No LLM API key is configured")
         key = (tuple(sorted(seed_names)), output_noun, take)
         hit = self._cache.get(key)
         if hit and hit[0] > time.monotonic():
             return hit[1]
+
         prompt = build_prompt(seed_names, input_noun, output_noun, naming, take, with_year)
-        picks = parse_picks(await self._complete(prompt), take)
-        self._cache[key] = (time.monotonic() + CACHE_SECONDS, picks)
-        return picks
+        if self._complete:
+            answer = (parse_picks(await self._complete(prompt), take), self.model)
+        else:
+            answer, last_error = None, None
+            for model in self.models:
+                try:
+                    message = await self.chat([
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ], model, json_mode=True)
+                    answer = (parse_picks(message.get("content") or "", take), model)
+                    break
+                except LLMError as exc:
+                    last_error = exc  # try the next model
+            if answer is None:
+                raise last_error
+
+        self._cache[key] = (time.monotonic() + CACHE_SECONDS, answer)
+        return answer

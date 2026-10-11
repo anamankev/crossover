@@ -14,7 +14,8 @@ QLOO_API_URL = os.getenv("QLOO_API_URL", "https://hackathon.api.qloo.com").rstri
 QLOO_API_KEY = os.getenv("QLOO_API_KEY", "")
 
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "")
+# Comma-separated, tried in order. Empty means the built-in defaults.
+LLM_MODELS = [m.strip() for m in os.getenv("LLM_MODELS", "").split(",") if m.strip()]
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
 
 # Render sets this to the app's public address. Used by the keepalive ping.

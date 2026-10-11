@@ -1,24 +1,20 @@
-"""The two sides of the comparison, step by step.
+"""Shared steps for both sides of the comparison.
 
-grounded(): the Qloo-grounded agent.
-    1. find the user's inputs in Qloo's catalog
-    2. ask the taste graph for the best fits in the other domain
-    3. read back which input drove each pick
+resolve_seeds():     find the user's inputs in Qloo's catalog
+check_candidates():  the "taste check". Look named candidates up in Qloo
+                     (exact name; for films the year must agree too) and
+                     have Qloo score them against the user's inputs.
+baseline():          ask a plain LLM the question, then run the taste
+                     check on its answer.
 
-baseline(): a plain LLM answering from memory, then *measured* with Qloo.
-    1. ask the LLM the same question
-    2. look each of its picks up in Qloo (exact name; for films the year must agree too)
-    3. ask Qloo to score those picks against the same inputs
-
-Both return plain dictionaries ready to send to the browser.
+The agent that uses Qloo as a tool lives in app/agent.py.
 """
 
 import asyncio
-import time
 
 from app import metrics
 from app.domains import DOMAINS
-from app.llm import LLMBaseline, build_prompt
+from app.llm import LLM, build_prompt
 from app.qloo import Entity, QlooClient, normalize_name
 
 
@@ -92,43 +88,6 @@ def seeds_to_list(seeds: list[dict]) -> list[dict]:
     } for s in seeds]
 
 
-async def grounded(qloo: QlooClient, names: list[str], input_domain: str, output_domain: str, take: int) -> dict:
-    source, target = DOMAINS[input_domain], DOMAINS[output_domain]
-    trace = []
-
-    started = time.monotonic()
-    seeds = await resolve_seeds(qloo, names, source["qloo_type"])
-    trace.append({
-        "step": f"Found your {source['noun']} in Qloo's catalog",
-        "detail": ", ".join(seed_label(s["entity"]) for s in seeds),
-        "call": "GET /search",
-        "ms": round((time.monotonic() - started) * 1000),
-    })
-
-    started = time.monotonic()
-    seed_ids = [s["entity"].entity_id for s in seeds]
-    picks = await qloo.recommend(seed_ids, target["qloo_type"], take)
-    trace.append({
-        "step": f"Asked the taste graph for {target['noun']}",
-        "detail": f"{len(seed_ids)} {source['noun']} as signals, results filtered to {target['qloo_type']}",
-        "call": "GET /v2/insights",
-        "ms": round((time.monotonic() - started) * 1000),
-    })
-    trace.append({
-        "step": "Read which input drove each pick",
-        "detail": "Qloo's explainability data, returned with the same call",
-        "call": "feature.explainability=true",
-        "ms": 0,
-    })
-
-    return {
-        "seeds": seeds_to_list(seeds),
-        "picks": [pick_to_dict(p, seeds) for p in picks],
-        "metrics": metrics.summarize(picks),
-        "trace": trace,
-    }
-
-
 def choose_match(candidates: list[Entity], scored: dict[str, Entity], year: int | None, needs_year: bool):
     """Decide which Qloo entity, if any, an LLM pick really refers to.
 
@@ -161,7 +120,35 @@ def choose_match(candidates: list[Entity], scored: dict[str, Entity], year: int 
     return max(with_score, key=lambda e: e.popularity if e.popularity is not None else -1), None
 
 
-async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
+async def check_candidates(qloo: QlooClient, seed_ids: list[str], output_domain: str,
+                           candidates: list[dict]) -> list[dict]:
+    """Verify and score a list of named candidates against Qloo.
+
+    Each candidate is {"name", "year"} (year may be None). Returns one
+    result per candidate, in the same order:
+        {"name", "year", "entity": Entity or None, "why_not": str or None}
+    `entity` carries Qloo's affinity for the given seeds.
+
+    This is the "taste check": it is used on the plain LLM's answer, by
+    the agent on its own ideas, and by the public /api/check endpoint.
+    """
+    target = DOMAINS[output_domain]
+    groups = await asyncio.gather(
+        *(qloo.find_all_exact(c["name"], target["qloo_type"]) for c in candidates))
+
+    # One call scores every possible match against the seeds.
+    ids = list(dict.fromkeys(e.entity_id for group in groups for e in group))
+    scored = await qloo.score(seed_ids, target["qloo_type"], ids)
+
+    results = []
+    for candidate, group in zip(candidates, groups):
+        entity, why_not = choose_match(group, scored, candidate.get("year"), target["needs_year"])
+        results.append({"name": candidate["name"], "year": candidate.get("year"),
+                        "entity": entity, "why_not": why_not})
+    return results
+
+
+async def baseline(qloo: QlooClient, llm: LLM, names: list[str],
                    input_domain: str, output_domain: str, take: int) -> dict:
     source, target = DOMAINS[input_domain], DOMAINS[output_domain]
     needs_year = target["needs_year"]
@@ -170,25 +157,19 @@ async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
     seed_ids = [s["entity"].entity_id for s in seeds]
     seed_labels = [seed_label(s["entity"]) for s in seeds]
 
-    llm_picks = await llm.recommend(seed_labels, source["noun"], target["noun"],
-                                    target["naming"], take, needs_year)
-
-    candidates = await asyncio.gather(
-        *(qloo.find_all_exact(p["name"], target["qloo_type"]) for p in llm_picks))
-
-    # One call scores every candidate against the same inputs the Qloo side used.
-    candidate_ids = list(dict.fromkeys(e.entity_id for group in candidates for e in group))
-    scored = await qloo.score(seed_ids, target["qloo_type"], candidate_ids)
+    llm_picks, model = await llm.recommend(seed_labels, source["noun"], target["noun"],
+                                           target["naming"], take, needs_year)
+    checked = await check_candidates(qloo, seed_ids, output_domain, llm_picks)
 
     rows, measured, used = [], [], set()
-    for pick, group in zip(llm_picks, candidates):
-        entity, why_not = choose_match(group, scored, pick["year"], needs_year)
+    for pick, result in zip(llm_picks, checked):
+        entity = result["entity"]
         row = {
             "llm_name": pick["name"],
             "llm_year": pick["year"],
             "reason": pick["reason"],
             "measured": entity is not None,
-            "why_not": why_not,
+            "why_not": result["why_not"],
         }
         if entity:
             row.update(pick_to_dict(entity))
@@ -197,13 +178,10 @@ async def baseline(qloo: QlooClient, llm: LLMBaseline, names: list[str],
                 measured.append(entity)
         rows.append(row)
 
-    qloo_picks = await qloo.recommend(seed_ids, target["qloo_type"], take)
-
     return {
-        "model": llm.model,
+        "model": model,
         "prompt": build_prompt(seed_labels, source["noun"], target["noun"], target["naming"], take, needs_year),
         "picks": rows,
         "measured": {"count": sum(1 for r in rows if r["measured"]), "of": len(rows)},
         "metrics": metrics.summarize(measured),
-        "overlap": metrics.overlap(qloo_picks, measured),
     }

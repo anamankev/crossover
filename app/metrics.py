@@ -79,12 +79,11 @@ def tag_variety(picks: list[Entity]) -> dict:
     return _result(sum(distances) / len(distances), len(tag_sets), len(picks))
 
 
-def overlap(list_a: list[Entity], list_b: list[Entity]) -> dict:
-    """How many entities appear in both lists (same Qloo entity id)."""
-    ids_a = {p.entity_id for p in list_a}
-    ids_b = {p.entity_id for p in list_b}
-    shared = ids_a & ids_b
-    return {"count": len(shared), "ids": sorted(shared), "of_a": len(ids_a), "of_b": len(ids_b)}
+def overlap(ids_a: list[str], ids_b: list[str]) -> dict:
+    """How many Qloo entity ids appear in both lists."""
+    set_a, set_b = set(ids_a), set(ids_b)
+    shared = set_a & set_b
+    return {"count": len(shared), "ids": sorted(shared), "of_a": len(set_a), "of_b": len(set_b)}
 
 
 def summarize(picks: list[Entity]) -> dict:

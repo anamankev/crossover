@@ -46,6 +46,7 @@ SEARCH = {
     (MOVIE, "remake"): [hit("R72", "Remake", "1972"), hit("R02", "Remake", "2002")],
     (ARTIST, "alpha band"): [hit("A1", "Alpha Band")],
     (ARTIST, "beta singer"): [hit("A2", "Beta Singer")],
+    (ARTIST, "delta duo"): [hit("A6", "Delta Duo")],
     # Two artists share this name. Search lists the obscure one first.
     (ARTIST, "twins"): [hit("TW_SMALL", "Twins"), hit("TW_BIG", "Twins")],
     # In the catalog, but Qloo will not score it.
@@ -62,6 +63,7 @@ GRAPH = {
         artist("TW_BIG", "Twins", 0.70, 0.99, ["jazz"]),
         artist("A2", "Beta Singer", 0.50, 1.00, ["pop"]),
         artist("TW_SMALL", "Twins", 0.30, 0.10, ["pop", "indie"]),
+        artist("A6", "Delta Duo", 0.20, 0.30, ["metal"]),
     ],
     MOVIE: [
         movie("R02", "Remake", 2002, 0.85, 0.90, ["drama"]),
