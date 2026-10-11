@@ -15,15 +15,12 @@ OUTPUT_DOMAINS = {
         "label": "Travel",
         "qloo_type": "urn:entity:destination",
         "noun": "travel destinations",
-        # How the plain LLM is told to name its picks, so the names can
-        # be looked up in Qloo afterwards.
-        "naming": "Give the city, town or region name only, for example 'Lisbon'.",
-    },
-    "book": {
-        "label": "Books",
-        "qloo_type": "urn:entity:book",
-        "noun": "books",
-        "naming": "Give the book title only, without the author.",
+        # How the plain LLM is told to name its picks, so each one can be
+        # looked up in Qloo afterwards and checked against its country.
+        "naming": (
+            "Give each as a city, town or region name only (for example \"Lisbon\"), "
+            "plus its two-letter ISO country code (for example \"PT\")."
+        ),
     },
 }
 

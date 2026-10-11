@@ -49,7 +49,7 @@ def test_parse_entity_reads_the_fields_we_use():
         "name": "Testville",
         "disambiguation": "Testland",
         "popularity": 0.75,
-        "properties": {"geocode": {"country_code": "TL"}, "image": {"url": "https://img.test/e1.jpg"}},
+        "properties": {"geocode": {"country_code": "TL", "admin1_region": "North"}, "image": {"url": "https://img.test/e1.jpg"}},
         "tags": [{"id": "urn:tag:genre:destination:beaches", "name": "Beaches", "type": "urn:tag:genre:destination"}],
         "query": {
             "affinity": 0.9,
@@ -62,6 +62,7 @@ def test_parse_entity_reads_the_fields_we_use():
     assert entity.popularity == 0.75
     assert entity.affinity == 0.9
     assert entity.country_code == "TL"
+    assert entity.region == "North"
     assert entity.image_url == "https://img.test/e1.jpg"
     assert entity.tags[0]["name"] == "Beaches"
     assert entity.contributions == {"S1": 0.6, "S2": 0.4}
@@ -95,23 +96,33 @@ def test_search_sends_key_in_header_and_type_in_query():
     assert [e.name for e in results] == ["Alpha"]
 
 
-def test_find_exact_rejects_a_fuzzy_hit():
+def test_find_all_exact_rejects_a_fuzzy_hit():
     # Qloo's search returns its nearest guess even for invented names.
     def handler(request):
         return httpx.Response(200, json={"results": [fake_entity("E9", "Hilton Head Island")]})
 
     client = make_client(handler)
-    assert asyncio.run(client.find_exact("Zxqv Flarnbuckle Island", "urn:entity:destination")) is None
+    assert asyncio.run(client.find_all_exact("Zxqv Flarnbuckle Island", "urn:entity:destination")) == []
 
 
-def test_find_exact_accepts_a_match_that_differs_only_by_accent_or_case():
+def test_find_all_exact_accepts_a_match_that_differs_only_by_accent_or_case():
     def handler(request):
         return httpx.Response(200, json={"results": [
             fake_entity("E0", "Cancun Bay Resort"), fake_entity("E1", "Cancún")]})
 
     client = make_client(handler)
-    found = asyncio.run(client.find_exact("cancun", "urn:entity:destination"))
-    assert found is not None and found.entity_id == "E1"
+    found = asyncio.run(client.find_all_exact("cancun", "urn:entity:destination"))
+    assert [e.entity_id for e in found] == ["E1"]
+
+
+def test_find_all_exact_returns_every_place_with_that_name():
+    def handler(request):
+        return httpx.Response(200, json={"results": [
+            fake_entity("V1", "Venice"), fake_entity("V2", "Venice"), fake_entity("X", "Venice Beach")]})
+
+    client = make_client(handler)
+    found = asyncio.run(client.find_all_exact("Venice", "urn:entity:destination"))
+    assert [e.entity_id for e in found] == ["V1", "V2"]
 
 
 def test_recommend_passes_seeds_and_asks_for_explainability():

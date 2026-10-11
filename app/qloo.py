@@ -36,7 +36,8 @@ class Entity:
     popularity: float | None = None  # percentile 0..1, None if Qloo did not send it
     affinity: float | None = None  # fit to the input signals 0..1, None outside insights calls
     tags: list[dict] = field(default_factory=list)  # each {"id", "name", "type"}
-    country_code: str | None = None
+    country_code: str | None = None  # two-letter code, e.g. "JP"
+    region: str | None = None  # e.g. "Okinawa"
     image_url: str | None = None
     description: str | None = None
     # entity_id of an input -> share of this recommendation it explains
@@ -88,6 +89,7 @@ def parse_entity(raw: dict) -> Entity:
         affinity=query.get("affinity"),
         tags=tags,
         country_code=(props.get("geocode") or {}).get("country_code") or None,
+        region=(props.get("geocode") or {}).get("admin1_region") or None,
         image_url=(props.get("image") or {}).get("url"),
         description=description,
         contributions=contributions,
@@ -173,19 +175,18 @@ class QlooClient:
         self._cache_put(key, entities)
         return entities
 
-    async def find_exact(self, name: str, qloo_type: str) -> Entity | None:
-        """Look a name up and accept it only if the names really match.
+    async def find_all_exact(self, name: str, qloo_type: str) -> list[Entity]:
+        """Every search hit whose name really matches, best first.
 
         Qloo's search returns its closest guess even for names that do
-        not exist, so the top hit alone proves nothing.
+        not exist, so a hit alone proves nothing. There can also be more
+        than one real match: "Venice" is a city in Italy, in California
+        and in Florida.
         """
         wanted = normalize_name(name)
         if not wanted:
-            return None
-        for entity in await self.search(name, qloo_type):
-            if normalize_name(entity.name) == wanted:
-                return entity
-        return None
+            return []
+        return [e for e in await self.search(name, qloo_type) if normalize_name(e.name) == wanted]
 
     async def recommend(self, seed_ids: list[str], qloo_type: str, take: int) -> list[Entity]:
         """Top `take` entities of `qloo_type` for people who like the seeds."""
@@ -219,7 +220,7 @@ class QlooClient:
             "filter.type": qloo_type,
             "signal.interests.entities": ",".join(seed_ids),
             "filter.results.entities": ",".join(entity_ids),
-            "take": max(len(entity_ids), 1),
+            "take": min(max(len(entity_ids), 1), 50),
         })
         entities = [parse_entity(raw) for raw in (data.get("results") or {}).get("entities") or []]
         scored = {e.entity_id: e for e in entities if e.entity_id in set(entity_ids)}
