@@ -1,43 +1,26 @@
-"""The baseline: a strong LLM asked the same question with no Qloo data.
+"""The baseline: an LLM asked the same question with no Qloo data.
 
 It gets the same three inputs the Qloo side gets and is asked for the
 same number of picks. It is not told to be mainstream or obscure. The
 prompt is deliberately plain so the comparison is fair: this is what you
 get when an agent recommends from its own memory.
+
+The call uses the "OpenAI-compatible" chat format, which Groq, Google,
+OpenRouter, OpenAI and others all accept. Changing provider or model is
+a matter of changing LLM_BASE_URL and LLM_MODEL, not the code.
 """
 
 import json
 import time
 
-import anthropic
+import httpx
 
-DEFAULT_MODEL = "claude-opus-5-5"
+# Groq has a free tier that needs no credit card.
+DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 CACHE_SECONDS = 24 * 60 * 60
 
 SYSTEM_PROMPT = "You are a recommendation assistant. Recommend things the person will genuinely love."
-
-def picks_schema(with_year: bool) -> dict:
-    """The JSON shape the LLM must answer in."""
-    properties = {"name": {"type": "string"}, "reason": {"type": "string"}}
-    if with_year:
-        properties["year"] = {"type": "integer"}
-    return {
-        "type": "object",
-        "properties": {
-            "picks": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": properties,
-                    "required": sorted(properties),
-                    "additionalProperties": False,
-                },
-            }
-        },
-        "required": ["picks"],
-        "additionalProperties": False,
-    }
-
 
 class LLMError(Exception):
     """The LLM could not be reached, refused, or answered in the wrong shape."""
@@ -89,47 +72,53 @@ def parse_picks(text: str, take: int) -> list[dict]:
 
 
 class LLMBaseline:
-    def __init__(self, api_key: str, model: str = "", complete=None):
-        """`complete` can replace the real API call in tests: async (prompt, schema) -> str."""
+    def __init__(self, api_key: str, model: str = "", base_url: str = "", complete=None):
+        """`complete` can replace the real API call in tests: async (prompt) -> str."""
         self.model = model or DEFAULT_MODEL
         self.configured = bool(api_key) or complete is not None
-        self._client = anthropic.AsyncAnthropic(api_key=api_key, timeout=60.0) if api_key else None
-        self._complete = complete or self._call_claude
+        self._http = httpx.AsyncClient(
+            base_url=(base_url or DEFAULT_BASE_URL).rstrip("/"),
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=60.0,
+        ) if api_key else None
+        self._complete = complete or self._call_llm
         self._cache: dict[tuple, tuple[float, list[dict]]] = {}
 
-    async def _call_claude(self, prompt: str, schema: dict) -> str:
+    async def close(self):
+        if self._http:
+            await self._http.aclose()
+
+    async def _call_llm(self, prompt: str) -> str:
         try:
-            response = await self._client.beta.messages.create(
-                model=self.model,
-                max_tokens=4000,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}],
-                output_config={
-                    # The model's normal effort level, so the baseline is not handicapped.
-                    "effort": "medium",
-                    "format": {"type": "json_schema", "schema": schema},
-                },
-                # If the model declines, let the API retry on its recommended fallback model.
-                betas=["server-side-fallback-2026-07-01"],
-                fallbacks="default",
-            )
-        except anthropic.AuthenticationError as exc:
-            raise LLMError("The LLM API key was rejected") from exc
-        except anthropic.RateLimitError as exc:
-            raise LLMError("The LLM is rate limited right now") from exc
-        except anthropic.APIStatusError as exc:
-            raise LLMError(f"The LLM returned HTTP {exc.status_code}") from exc
-        except anthropic.APIConnectionError as exc:
+            response = await self._http.post("/chat/completions", json={
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
+                # Ask for a JSON object back. parse_picks() still checks the shape.
+                "response_format": {"type": "json_object"},
+            })
+        except httpx.HTTPError as exc:
             raise LLMError("Could not reach the LLM") from exc
 
-        if response.stop_reason == "refusal":
-            raise LLMError("The LLM declined to answer")
-        if response.stop_reason == "max_tokens":
+        if response.status_code == 401:
+            raise LLMError("The LLM API key was rejected")
+        if response.status_code == 429:
+            raise LLMError("The LLM is rate limited right now. Try again in a minute")
+        if response.status_code != 200:
+            raise LLMError(f"The LLM returned HTTP {response.status_code}")
+
+        try:
+            choice = response.json()["choices"][0]
+            text = choice["message"]["content"]
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            raise LLMError("The LLM answered in an unexpected format") from exc
+        if choice.get("finish_reason") == "length":
             raise LLMError("The LLM answer was cut off")
-        for block in response.content:
-            if block.type == "text":
-                return block.text
-        raise LLMError("The LLM returned no text")
+        if not text:
+            raise LLMError("The LLM returned no text")
+        return text
 
     async def recommend(self, seed_names: list[str], input_noun: str, output_noun: str,
                         naming: str, take: int, with_year: bool) -> list[dict]:
@@ -141,6 +130,6 @@ class LLMBaseline:
         if hit and hit[0] > time.monotonic():
             return hit[1]
         prompt = build_prompt(seed_names, input_noun, output_noun, naming, take, with_year)
-        picks = parse_picks(await self._complete(prompt, picks_schema(with_year)), take)
+        picks = parse_picks(await self._complete(prompt), take)
         self._cache[key] = (time.monotonic() + CACHE_SECONDS, picks)
         return picks

@@ -81,12 +81,22 @@ visitors do not use up the monthly quota.
 
 ### 5. The LLM baseline (`app/llm.py`)
 
-One plain question to Claude Opus 5.5, no tools and no Qloo data: here
-are three things a person loves, recommend eight in the other domain.
-The prompt does not push it toward famous or obscure picks, and the page
-shows the exact prompt for every run. A strong model at its normal
-effort was chosen on purpose: beating a weak baseline would prove
-nothing.
+One plain question to an LLM, no tools and no Qloo data: here are three
+things a person loves, recommend eight in the other domain. The prompt
+does not push it toward famous or obscure picks, and the page shows the
+exact prompt and the model name for every run.
+
+This was first written for Claude Opus 5.5. You asked for a free key, so
+it now uses the "OpenAI-compatible" format that many providers accept,
+and defaults to `openai/gpt-oss-120b` on Groq's free tier (no credit
+card, roughly 30 requests a minute and 1,000 a day). Google's free tier
+was the other candidate, but recent reports put it at about 20 requests
+a day, which a few judges could use up.
+
+**The trade-off to be ready for:** a free open-weight model is a weaker
+baseline than a top paid one. A judge could say "you only beat a free
+model". The README says this plainly. Switching to a stronger model
+later is two settings (`LLM_BASE_URL` and `LLM_MODEL`), no code.
 
 If there is no LLM key, the app says the baseline is not connected. It
 never shows invented results.
@@ -202,7 +212,7 @@ wrong thing and shown a confident, wrong number.
 | Qloo side, both directions | Working against the live API |
 | Metrics | Working, unit tested |
 | Page | Working locally in light, dark and phone widths |
-| Tests | 86 passing |
+| Tests | 92 passing |
 | LLM baseline | Code written and tested with a pretend LLM. **Never run against the real LLM: there is no key in `.env` yet.** |
 | GitHub | Pushed. Public at https://github.com/anamankev/crossover |
 | Render | **Not deployed.** Needs your Render account. |
@@ -210,7 +220,7 @@ wrong thing and shown a confident, wrong number.
 
 ## What to do next
 
-1. Add an Anthropic API key to `.env` after `LLM_API_KEY=`, so the LLM
+1. Add a free Groq API key to `.env` after `LLM_API_KEY=`, so the LLM
    side can be run for real for the first time.
 2. Deploy on Render with the button in the README.
 3. Put the live URL at the top of the README and in the Devpost draft.

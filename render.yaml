@@ -19,5 +19,9 @@ services:
         sync: false
       - key: LLM_API_KEY
         sync: false
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_MODEL
+        value: openai/gpt-oss-120b
       - key: REPO_URL
         sync: false

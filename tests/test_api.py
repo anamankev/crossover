@@ -12,7 +12,7 @@ from tests.fakes import fake_qloo
 BODY = {"input_domain": "movie", "output_domain": "artist", "seeds": ["Film One", "Film Two"]}
 
 
-async def fake_complete(prompt, schema):
+async def fake_complete(prompt):
     return json.dumps({"picks": [{"name": "Alpha Band", "reason": "r"}]})
 
 

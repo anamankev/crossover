@@ -11,7 +11,7 @@ Built for the [Qloo Agentic Hackathon](https://qloo.devpost.com/).
 You give Crossover three things you love in one domain. It answers in a different domain, twice:
 
 1. **Qloo-grounded.** An agent finds your three inputs in Qloo's catalog, asks the taste graph for the best fits in the other domain, and reads back how much each input contributed to each pick.
-2. **Plain LLM.** A strong LLM (Claude Opus 5.5 by default) gets the same three inputs and the same request, with no Qloo data.
+2. **Plain LLM.** An LLM gets the same three inputs and the same request, with no Qloo data. The page names the exact model used for every run.
 
 Most projects say that grounding beats guessing. Crossover puts both answers side by side and measures the difference on screen, using Qloo itself as the measuring instrument: every LLM pick is looked up in Qloo's catalog and scored against the same three inputs.
 
@@ -47,7 +47,7 @@ The code is in [app/metrics.py](app/metrics.py). Every function there is plain a
 - **A pick only counts on a confident match.** Qloo's search is fuzzy: searching for an invented name still returns something. So an LLM pick is matched only when the normalised name is identical, and for films the release year must also agree to within one year. Otherwise it is shown as "not measured" with the reason.
 - **Unmeasured is not zero.** A pick Qloo cannot score does not drag the LLM's average down. It is simply not in the average.
 - **The same fields for both sides.** Qloo reports slightly different popularity for one entity in `/search` and `/v2/insights`, so both lists take their numbers from insights responses only.
-- **The baseline is not handicapped.** It is a current top model at its default effort. The prompt asks for the same number of picks and does not steer toward famous or obscure choices. The exact prompt is shown on the page for every run.
+- **The baseline gets a fair question.** The prompt asks for the same number of picks and does not steer toward famous or obscure choices. The exact prompt is shown on the page for every run.
 
 ### What the numbers do not prove
 
@@ -56,6 +56,7 @@ This matters more than the numbers.
 - **Taste fit is Qloo's own score, and Qloo's list is ranked by it.** Qloo will lead on that metric by construction. It is not an independent referee. The useful reading is the size of the gap, and which of the LLM's picks the graph agrees with. The page says this next to the number.
 - **None of this measures whether a person would enjoy a pick.** That needs human ratings, which this project does not have.
 - **How mainstream and Variety are descriptions, not scores.** Neither direction is better in general.
+- **The baseline is an open-weight model on a free tier.** The live demo uses `openai/gpt-oss-120b` served by Groq, because it is free to run. A top commercial model may guess better, so read the gap as "this model versus the graph", not "every LLM versus the graph". Any OpenAI-compatible provider can be swapped in with two settings.
 - **Artists with the same name.** There is no release year to check for an artist, so when several share an exact name the most popular one in Qloo is used.
 
 ### Why only films and music
@@ -84,8 +85,9 @@ Open http://localhost:8000.
 |---|---|---|
 | `QLOO_API_KEY` | yes | Your Qloo hackathon key |
 | `QLOO_API_URL` | no | Defaults to `https://hackathon.api.qloo.com` |
-| `LLM_API_KEY` | for the comparison | An Anthropic API key. Without it the Qloo side still works and the LLM side says it is not connected. It never shows invented results. |
-| `LLM_MODEL` | no | Defaults to `claude-opus-5-5` |
+| `LLM_API_KEY` | for the comparison | A key for the baseline LLM. A free one from [console.groq.com](https://console.groq.com) works with the defaults. Without it the Qloo side still works and the LLM side says it is not connected. It never shows invented results. |
+| `LLM_BASE_URL` | no | Any OpenAI-compatible API. Defaults to Groq, `https://api.groq.com/openai/v1` |
+| `LLM_MODEL` | no | Defaults to `openai/gpt-oss-120b` |
 
 ### Run the tests
 

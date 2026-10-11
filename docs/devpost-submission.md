@@ -18,7 +18,7 @@ You name three films and get music, or three artists and get films.
 Two things answer:
 
 - **The Qloo-grounded agent** finds your three inputs in Qloo's catalog, asks the taste graph for the best fits in the other domain, and reports how much each of your inputs contributed to each pick.
-- **A plain LLM** (Claude Opus 5.5) gets the same three inputs and the same request, with no access to Qloo.
+- **A plain LLM** ([MODEL NAME AS SHOWN ON THE LIVE PAGE]) gets the same three inputs and the same request, with no access to Qloo.
 
 Then Crossover does the part most demos skip. It looks up every one of the LLM's picks in Qloo's catalog and asks Qloo to score them against your three inputs, on the same scale as Qloo's own picks. The page shows both lists side by side with:
 
@@ -41,7 +41,7 @@ Without Qloo there is no product. Qloo is used three ways in every request:
 
 - **Backend:** Python and FastAPI. A small Qloo client handles the 5-per-second rate limit, retries and caching. The metrics are a separate module of plain arithmetic.
 - **Frontend:** plain HTML, CSS and JavaScript with no build step. Light and dark themes, works on a phone.
-- **Tests:** 86 unit tests. Each metric is tested against answers worked out by hand.
+- **Tests:** 92 unit tests. Each metric is tested against answers worked out by hand.
 - **Hosting:** Render, with a keepalive so judges do not hit a sleeping server.
 
 We started by spending an hour only making real API calls and writing down what came back. Those notes are in the repo.
@@ -79,4 +79,4 @@ Whether you would actually enjoy a pick. That needs people rating results. Cross
 
 ## Built with
 
-Python, FastAPI, Qloo Insights API, Claude API, HTML, CSS, JavaScript, Render
+Python, FastAPI, Qloo Insights API, Groq API, HTML, CSS, JavaScript, Render

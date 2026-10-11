@@ -16,7 +16,7 @@ FILMS = ["Film One", "Film Two"]
 
 def llm_saying(*picks):
     """A pretend LLM. Each pick is a name, or a (name, year) pair."""
-    async def complete(prompt, schema):
+    async def complete(prompt):
         rows = []
         for pick in picks:
             name, year = pick if isinstance(pick, tuple) else (pick, None)
@@ -186,4 +186,4 @@ def test_baseline_for_films_uses_the_year_the_llm_gave():
 def test_baseline_reports_the_exact_prompt_and_model():
     result = run_baseline("Alpha Band")
     assert "Film One (2001)" in result["prompt"]
-    assert result["model"] == "claude-opus-5-5"
+    assert result["model"] == "openai/gpt-oss-120b"

@@ -15,6 +15,7 @@ QLOO_API_KEY = os.getenv("QLOO_API_KEY", "")
 
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")
 
 # Render sets this to the app's public address. Used by the keepalive ping.
 PUBLIC_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")

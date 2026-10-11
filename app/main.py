@@ -58,12 +58,13 @@ async def keepalive():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.qloo = QlooClient(config.QLOO_API_URL, config.QLOO_API_KEY)
-    app.state.llm = LLMBaseline(config.LLM_API_KEY, config.LLM_MODEL)
+    app.state.llm = LLMBaseline(config.LLM_API_KEY, config.LLM_MODEL, config.LLM_BASE_URL)
     app.state.hits = {}
     task = asyncio.create_task(keepalive())
     yield
     task.cancel()
     await app.state.qloo.close()
+    await app.state.llm.close()
 
 
 app = FastAPI(title="Crossover", lifespan=lifespan)
