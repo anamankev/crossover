@@ -1,1 +1,109 @@
-<!doctype html><title>Crossover</title><p>Crossover is starting up.</p>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crossover: taste graph vs. LLM guessing</title>
+  <meta name="description" content="Name three films or artists you love. Crossover recommends in the other domain using Qloo's taste graph, then measures a plain LLM's picks against it.">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <p class="wordmark">Crossover</p>
+      <h1>Three things you love in one world.<br>What you'll love in another.</h1>
+      <p class="lede">
+        Name three films and get music, or three artists and get films. One answer comes from
+        Qloo's taste graph. The other comes from a strong LLM working from memory. Then we
+        measure the LLM's picks against the graph and show you the numbers.
+      </p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="waking" class="notice" hidden>
+      Waking the server. Free hosting sleeps when nobody is visiting, so the first load can take about 30 seconds.
+    </div>
+
+    <section class="card" aria-labelledby="ask-title">
+      <h2 id="ask-title" class="visually-hidden">Your taste</h2>
+      <form id="form">
+        <div class="direction" role="radiogroup" aria-label="Direction">
+          <label><input type="radio" name="direction" value="movie" checked><span>Films → Music</span></label>
+          <label><input type="radio" name="direction" value="artist"><span>Music → Films</span></label>
+        </div>
+        <div class="inputs">
+          <input id="seed0" type="text" maxlength="100" autocomplete="off" aria-label="First thing you love">
+          <input id="seed1" type="text" maxlength="100" autocomplete="off" aria-label="Second thing you love">
+          <input id="seed2" type="text" maxlength="100" autocomplete="off" aria-label="Third thing you love">
+          <button id="go" type="submit">Cross over</button>
+        </div>
+      </form>
+      <div class="examples">
+        <span class="muted">Or try one:</span>
+        <span id="examples"></span>
+      </div>
+    </section>
+
+    <div id="error" class="notice error" role="alert" hidden></div>
+
+    <div id="results" hidden>
+      <section id="seeds" class="seeds" aria-label="What Qloo matched your inputs to"></section>
+
+      <section class="card" aria-labelledby="score-title">
+        <div class="card-head">
+          <h2 id="score-title">The measurement</h2>
+          <div class="legend" aria-label="Legend">
+            <span><i class="swatch qloo"></i>Qloo taste graph</span>
+            <span><i class="swatch llm"></i>Plain LLM</span>
+          </div>
+        </div>
+        <div id="scoreboard"></div>
+      </section>
+
+      <section class="columns">
+        <div class="card" aria-labelledby="qloo-title">
+          <div class="card-head">
+            <h2 id="qloo-title"><i class="swatch qloo"></i>Qloo taste graph</h2>
+            <span class="muted small">ranked by taste fit</span>
+          </div>
+          <ol id="qloo-list" class="picks"></ol>
+        </div>
+        <div class="card" aria-labelledby="llm-title">
+          <div class="card-head">
+            <h2 id="llm-title"><i class="swatch llm"></i>Plain LLM</h2>
+            <span id="llm-model" class="muted small"></span>
+          </div>
+          <ol id="llm-list" class="picks"></ol>
+        </div>
+      </section>
+
+      <section class="card method">
+        <h2>How this was measured</h2>
+        <div id="trace"></div>
+        <ul class="plain">
+          <li><strong>Same question, both sides.</strong> The LLM gets the same inputs, as matched in Qloo, and is asked for the same number of picks. It is not told to be mainstream or obscure. The exact prompt is below.</li>
+          <li><strong>Taste fit is Qloo's own score.</strong> We look each LLM pick up in Qloo's catalog and ask Qloo how well it fits your inputs. Qloo's list is ranked by that score, so Qloo leads on it by construction. The useful reading is the gap, and which LLM picks the graph agrees with.</li>
+          <li><strong>Nothing is estimated.</strong> A pick only counts when its name matches a catalog entry exactly (for films, the release year too) and Qloo returns a score. Otherwise it is shown as "not measured" and left out of every number.</li>
+          <li><strong>What this cannot tell you.</strong> Whether you would actually enjoy a pick. That needs people, not a score.</li>
+        </ul>
+        <details>
+          <summary>The exact prompt the LLM received</summary>
+          <pre id="prompt"></pre>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <footer class="wrap foot">
+    <p>
+      Built for the Qloo Agentic Hackathon. Recommendations and scores come from the
+      <a href="https://docs.qloo.com/" rel="noopener">Qloo API</a>.
+      <span id="repo-link"></span> MIT licensed.
+    </p>
+  </footer>
+
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

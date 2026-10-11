@@ -1,0 +1,196 @@
+/* Colors are named by the job they do, so light and dark mode swap in one place.
+   Blue is always Qloo and orange is always the LLM, everywhere on the page. */
+:root {
+  color-scheme: light;
+  --page: #f5f4f0;
+  --surface: #fcfcfb;
+  --line: #e4e2dc;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --text-3: #7a7873;
+  --qloo: #2a78d6;
+  --llm: #eb6834;
+  --track: #ecebe6;
+  --accent-ink: #0b0b0b;
+  --accent-on: #fcfcfb;
+  --danger: #b3261e;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #111110;
+    --surface: #1a1a19;
+    --line: #30302d;
+    --text: #ffffff;
+    --text-2: #c3c2b7;
+    --text-3: #8f8e86;
+    --qloo: #3987e5;
+    --llm: #d95926;
+    --track: #2a2a28;
+    --accent-ink: #ffffff;
+    --accent-on: #111110;
+    --danger: #ff8a80;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+.muted { color: var(--text-3); }
+.small { font-size: 13px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+a { color: inherit; }
+
+/* ---- header ---- */
+.top { padding: 44px 0 26px; }
+.wordmark { margin: 0 0 18px; font-size: 13px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+h1 {
+  margin: 0 0 14px;
+  font: 600 clamp(28px, 4.6vw, 46px)/1.12 ui-serif, Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.lede { margin: 0; max-width: 64ch; color: var(--text-2); font-size: 17px; }
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  margin: 0 0 18px;
+}
+.card h2 { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.swatch.qloo { background: var(--qloo); }
+.swatch.llm { background: var(--llm); }
+.legend { display: flex; gap: 16px; font-size: 13px; color: var(--text-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.notice {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 16px; margin: 0 0 18px; color: var(--text-2);
+}
+.notice.error { border-color: var(--danger); color: var(--danger); }
+
+/* ---- the form ---- */
+.direction { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; margin-bottom: 14px; }
+.direction input { position: absolute; opacity: 0; }
+.direction span { display: block; padding: 7px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.direction input:checked + span { background: var(--accent-ink); color: var(--accent-on); }
+.direction input:focus-visible + span { outline: 2px solid var(--qloo); outline-offset: 2px; }
+
+.inputs { display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 10px; }
+.inputs input {
+  min-width: 0; padding: 12px 14px; font: inherit; color: var(--text);
+  background: var(--page); border: 1px solid var(--line); border-radius: 10px;
+}
+.inputs input:focus-visible, button:focus-visible, .chip:focus-visible { outline: 2px solid var(--qloo); outline-offset: 2px; }
+button#go {
+  padding: 12px 22px; font: inherit; font-weight: 650; cursor: pointer;
+  background: var(--accent-ink); color: var(--accent-on); border: 0; border-radius: 10px;
+}
+button#go:disabled { opacity: 0.55; cursor: progress; }
+.examples { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+.examples #examples { display: contents; }
+.chip {
+  font: inherit; font-size: 13px; padding: 6px 12px; cursor: pointer; color: var(--text-2);
+  background: transparent; border: 1px solid var(--line); border-radius: 999px;
+}
+.chip:hover { color: var(--text); border-color: var(--text-3); }
+
+/* ---- matched inputs ---- */
+.seeds { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 0 0 18px; font-size: 14px; color: var(--text-2); }
+.seed { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; color: var(--text); }
+.seed img, .seed .ph { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; background: var(--track); }
+.seed .fuzzy { color: var(--text-3); font-size: 12px; }
+
+/* ---- the measurement ---- */
+.metric { display: grid; grid-template-columns: minmax(180px, 250px) 1fr; gap: 6px 24px; padding: 16px 0; border-top: 1px solid var(--line); }
+.metric:first-child { border-top: 0; padding-top: 4px; }
+.metric h3 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+.metric p { margin: 0; font-size: 13px; color: var(--text-2); }
+.metric .caveat { grid-column: 1 / -1; font-size: 13px; color: var(--text-3); margin-top: 4px; }
+.sides { display: grid; gap: 10px; align-content: start; }
+.side { display: grid; grid-template-columns: 112px 1fr auto; gap: 12px; align-items: center; font-size: 14px; }
+.side .who { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.side .value { font-variant-numeric: tabular-nums; font-weight: 650; min-width: 5ch; text-align: right; }
+.side .cover { grid-column: 2 / -1; font-size: 12px; color: var(--text-3); margin-top: -6px; }
+.bar { height: 10px; background: var(--track); border-radius: 0 4px 4px 0; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.bar i.qloo { background: var(--qloo); }
+.bar i.llm { background: var(--llm); }
+.stat { font-size: 14px; color: var(--text); grid-column: 2 / -1; }
+.stat b { font-variant-numeric: tabular-nums; }
+.pending { color: var(--text-3); font-style: italic; }
+
+/* strip plot: every pick as a dot on Qloo's taste-fit scale */
+.strip { margin-top: 6px; }
+.strip svg { width: 100%; height: auto; display: block; overflow: visible; }
+.strip .axis { stroke: var(--line); stroke-width: 1; }
+.strip text { fill: var(--text-3); font-size: 11px; font-family: inherit; }
+.strip circle { stroke: var(--surface); stroke-width: 2; cursor: default; }
+.strip circle.qloo { fill: var(--qloo); }
+.strip circle.llm { fill: var(--llm); }
+.strip circle:focus-visible { outline: none; stroke: var(--text); }
+
+/* ---- the two lists ---- */
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.columns .card { margin: 0 0 18px; }
+.picks { list-style: none; margin: 0; padding: 0; }
+.pick { display: grid; grid-template-columns: 22px 48px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.pick:first-child { border-top: 0; }
+.pick .rank { color: var(--text-3); font-size: 13px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.pick img, .pick .ph { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; background: var(--track); }
+.pick .name { font-weight: 650; }
+.pick .year { color: var(--text-3); font-weight: 400; }
+.pick .genres, .pick .reason, .pick .drivers { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.pick .drivers { color: var(--text-3); }
+.pick .fit { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; margin-top: 8px; font-size: 13px; }
+.pick .fit .value { font-variant-numeric: tabular-nums; color: var(--text-2); }
+.pick .bar { height: 6px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--text-2); margin-left: 6px; vertical-align: 2px; }
+.pick.unmeasured .name { color: var(--text-2); }
+.pick .why-not { font-size: 12px; color: var(--text-3); margin-top: 6px; }
+.skeleton { height: 14px; border-radius: 6px; background: var(--track); margin: 14px 0; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* ---- method ---- */
+.method h2 { margin-bottom: 12px; }
+.plain { margin: 12px 0; padding-left: 18px; color: var(--text-2); font-size: 14px; }
+.plain li { margin: 6px 0; }
+.trace { display: grid; gap: 6px; font-size: 13px; color: var(--text-2); margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.trace li { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: baseline; counter-increment: step; }
+.trace li::before { content: counter(step); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.trace code, pre { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.trace code { color: var(--text-3); }
+details { font-size: 14px; color: var(--text-2); }
+summary { cursor: pointer; }
+pre { white-space: pre-wrap; background: var(--page); border: 1px solid var(--line); border-radius: 8px; padding: 12px; color: var(--text-2); }
+
+.foot { padding: 12px 20px 40px; font-size: 13px; color: var(--text-3); }
+
+.tooltip {
+  position: fixed; z-index: 10; pointer-events: none; max-width: 260px;
+  background: var(--accent-ink); color: var(--accent-on); font-size: 12px;
+  padding: 6px 9px; border-radius: 6px;
+}
+
+@media (max-width: 760px) {
+  .inputs { grid-template-columns: 1fr; }
+  .columns { grid-template-columns: 1fr; }
+  .metric { grid-template-columns: 1fr; }
+  .stat { grid-column: 1 / -1; }
+  .side { grid-template-columns: 96px 1fr auto; }
+}
+
+/* Let grid children shrink below their content width, so nothing pushes the page sideways on a phone. */
+.metric > *, .sides > *, .side > *, .pick > *, .columns > * { min-width: 0; }
+body { overflow-wrap: anywhere; }

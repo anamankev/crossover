@@ -1,0 +1,18 @@
+# Backup keepalive. Render's free plan sleeps after 15 quiet minutes and takes
+# about 30 seconds to wake. The app also pings itself, but that stops if the
+# app is ever asleep. This outside ping wakes it back up.
+#
+# It only runs once the repository variable APP_URL is set
+# (GitHub repo -> Settings -> Secrets and variables -> Actions -> Variables).
+# /healthz never calls Qloo or the LLM, so this costs no API quota.
+name: keepalive
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    if: ${{ vars.APP_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl --silent --show-error --max-time 60 "${{ vars.APP_URL }}/healthz"

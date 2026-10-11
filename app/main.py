@@ -109,6 +109,7 @@ def api_config(request: Request):
         "domains": {k: {"label": v["label"], "noun": v["noun"]} for k, v in DOMAINS.items()},
         "examples": EXAMPLES,
         "take": config.TAKE,
+        "repo_url": config.REPO_URL,
         "llm_configured": request.app.state.llm.configured,
         "llm_model": request.app.state.llm.model,
     }
